@@ -15,27 +15,15 @@ var tl transactionLogger.TransactionLogger
 
 func initTransactionLogger() error {
 	var err error
-	tl, err = transactionLogger.NewFileTransactionLogger("logs.log")
 
+	tl, err = transactionLogger.NewFileTransactionLogger("logs.log")
 	if err != nil {
 		return fmt.Errorf("failed to create event logger: %w", err)
 	}
 
-	events, errs := tl.ReadEvents()
-	e, err, ok := transactionLogger.Event{}, nil, true
-
-	for ok && err == nil {
-		select {
-		//ok == false means channel was closed
-		case err, ok = <-errs:
-		case e, ok = <-events:
-			switch e.Type {
-			case transactionLogger.EventPut:
-				err = core.Put(e.Key, e.Value)
-			case transactionLogger.EventDelete:
-				err = core.Delete(e.Key)
-			}
-		}
+	err = tl.ReadEvents()
+	if err != nil {
+		return fmt.Errorf("failed to read events: %w", err)
 	}
 
 	tl.Start()

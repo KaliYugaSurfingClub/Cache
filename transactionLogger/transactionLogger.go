@@ -2,6 +2,7 @@ package transactionLogger
 
 import (
 	"bufio"
+	"cache/core"
 	"fmt"
 	"os"
 )
@@ -9,7 +10,7 @@ import (
 type TransactionLogger interface {
 	WritePut(key, value string)
 	WriteDelete(key string)
-	ReadEvents() (<-chan Event, <-chan error)
+	ReadEvents() error
 	Start()
 	ErrCh() <-chan error
 }
@@ -85,49 +86,39 @@ func (tl *FileTransactionLogger) Start() {
 	}()
 }
 
-func (tl *FileTransactionLogger) ReadEvents() (<-chan Event, <-chan error) {
+func (tl *FileTransactionLogger) ReadEvents() error {
 	scanner := bufio.NewScanner(tl.file)
-	outEvent := make(chan Event)
-	//todo buffer 1
-	outError := make(chan error)
 
-	go func() {
-		//this goroutine writes to this channel and responsible for closing it
-		//after it writes everything
-		defer close(outError)
-		defer close(outEvent)
-		//deadlock without close
+	for scanner.Scan() {
+		line := scanner.Text()
 
-		for scanner.Scan() {
-			line := scanner.Text()
+		var e Event
+		//todo EOF error if last log is delete log
+		_, err := fmt.Sscanf(
+			line, "%d\t%d\t%s\t%s",
+			&e.Sequence, &e.Type, &e.Key, &e.Value,
+		)
 
-			var e Event
-			//todo EOF error if last log is delete log
-			_, err := fmt.Sscanf(
-				line, "%d\t%d\t%s\t%s",
-				&e.Sequence, &e.Type, &e.Key, &e.Value,
-			)
-
-			if err != nil {
-				outError <- fmt.Errorf("input event error: %w", err)
-				return
-			}
-
-			if tl.lastSequence >= e.Sequence {
-				outError <- fmt.Errorf("transaction number out of sequence")
-				return
-			}
-
-			tl.lastSequence = e.Sequence
-			outEvent <- e
+		if err != nil {
+			return err
 		}
 
-		//loop ends and we check cause of end
-		if err := scanner.Err(); err != nil {
-			outError <- fmt.Errorf("transaction log read failure: %w", err)
-			return
+		if tl.lastSequence >= e.Sequence {
+			return err
 		}
-	}()
 
-	return outEvent, outError
+		tl.lastSequence = e.Sequence
+		switch e.Type {
+		case EventPut:
+			err = core.Put(e.Key, e.Value)
+		case EventDelete:
+			err = core.Delete(e.Key)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
+
+	return nil
 }

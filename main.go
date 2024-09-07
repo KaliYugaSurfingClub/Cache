@@ -3,6 +3,7 @@ package main
 import (
 	"cache/services/transactionLogger"
 	"cache/transport"
+	"fmt"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
@@ -18,9 +19,15 @@ func main() {
 
 	tl.Start()
 
-	router.HandleFunc("/v1/{key}", transport.KeyValuePutHandler).Methods(http.MethodPut)
+	go func() {
+		for err := range tl.ErrCh() {
+			fmt.Println(err)
+		}
+	}()
+
 	router.HandleFunc("/v1/{key}", transport.KeyValueGetHandler).Methods(http.MethodGet)
-	router.HandleFunc("/v1/{key}", transport.KeyValueDeleteHandler).Methods(http.MethodDelete)
+	router.HandleFunc("/v1/{key}", transport.KeyValuePutHandler(tl)).Methods(http.MethodPut)
+	router.HandleFunc("/v1/{key}", transport.KeyValueDeleteHandler(tl)).Methods(http.MethodDelete)
 
 	log.Fatal(http.ListenAndServe(":8080", router))
 }

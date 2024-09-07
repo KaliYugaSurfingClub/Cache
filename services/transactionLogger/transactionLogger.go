@@ -1,7 +1,9 @@
 package transactionLogger
 
 import (
+	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 )
 
@@ -41,9 +43,11 @@ func NewFileTransactionLogger(filename string) (*FileTransactionLogger, error) {
 }
 
 func (tl *FileTransactionLogger) Start() {
+	//todo buff 16?
 	events := make(chan Event)
 	tl.events = events
 
+	//todo buff 1?
 	errs := make(chan error)
 	tl.errs = errs
 
@@ -55,8 +59,16 @@ func (tl *FileTransactionLogger) Start() {
 				tl.file, "%d\t%d\t%s\t%s\n",
 				tl.lastSequence, e.Type, e.Key, e.Value,
 			)
+
+			if rand.Float32() > 0.2 {
+				err = errors.New("some error")
+			}
+
 			if err != nil {
 				errs <- err
+				//stop reading from events => stop writing logs
+				//stop reading from events => handlers will start waiting for write to events channel
+				//and they will be blocked
 				return
 			}
 		}

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"cache/services/transactionLogger"
 	"errors"
 	"sync"
 )
@@ -14,17 +15,7 @@ type Store struct {
 
 var store = Store{data: make(map[string]string)}
 
-func Put(key string, value string) error {
-	store.Lock()
-	defer store.Unlock()
-
-	store.data[key] = value
-	return nil
-}
-
 func Get(key string) (string, error) {
-	//произвольное кол-во может удерживать RLock и читать
-	//но если кто-то держит Lock то это функция будет ждать пока блокировка на запись закончиться
 	store.RLock()
 	defer store.RUnlock()
 
@@ -36,9 +27,21 @@ func Get(key string) (string, error) {
 	return value, nil
 }
 
-func Delete(key string) error {
+func Put(key string, value string, tl transactionLogger.TransactionLogger) error {
 	store.Lock()
 	defer store.Unlock()
+
+	tl.WritePut(key, value)
+
+	store.data[key] = value
+	return nil
+}
+
+func Delete(key string, tl transactionLogger.TransactionLogger) error {
+	store.Lock()
+	defer store.Unlock()
+
+	tl.WriteDelete(key)
 
 	delete(store.data, key)
 	return nil

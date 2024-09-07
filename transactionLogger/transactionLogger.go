@@ -10,8 +10,8 @@ type TransactionLogger interface {
 	WritePut(key, value string)
 	WriteDelete(key string)
 	ReadEvents() (<-chan Event, <-chan error)
-	Run()
-	Err() <-chan error
+	Start()
+	ErrCh() <-chan error
 }
 
 type EventType byte
@@ -35,7 +35,7 @@ type FileTransactionLogger struct {
 	lastSequence uint64
 }
 
-func NewFileTransactionLogger(filename string) (*FileTransactionLogger, error) {
+func NewFileTransactionLogger(filename string) (TransactionLogger, error) {
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, err
@@ -57,13 +57,17 @@ func (tl *FileTransactionLogger) ErrCh() <-chan error {
 }
 
 func (tl *FileTransactionLogger) Start() {
+	//todo buffer 16
 	events := make(chan Event)
 	tl.events = events
 
+	//todo buffer 1
 	errs := make(chan error)
 	tl.errs = errs
 
 	go func() {
+		//always read from events channel, Somebody who write to this channel is
+		//responsible for closing it at the right time
 		for e := range events {
 			//todo first log with id = 1 and maybe current instead last
 			tl.lastSequence++
@@ -72,6 +76,7 @@ func (tl *FileTransactionLogger) Start() {
 				tl.file, "%d\t%d\t%s\t%s\n",
 				tl.lastSequence, e.Type, e.Key, e.Value,
 			)
+			//todo this errors do not handled
 			if err != nil {
 				errs <- err
 				return
@@ -87,15 +92,20 @@ func (tl *FileTransactionLogger) ReadEvents() (<-chan Event, <-chan error) {
 	outError := make(chan error)
 
 	go func() {
-		for scanner.Scan() {
-			//todo defer close
+		//this goroutine writes to this channel and responsible for closing it
+		//after it writes everything
+		defer close(outError)
+		defer close(outEvent)
+		//deadlock without close
 
+		for scanner.Scan() {
 			line := scanner.Text()
 
 			var e Event
+			//todo EOF error if last log is delete log
 			_, err := fmt.Sscanf(
 				line, "%d\t%d\t%s\t%s",
-				e.Sequence, e.Type, e.Key, e.Value,
+				&e.Sequence, &e.Type, &e.Key, &e.Value,
 			)
 
 			if err != nil {

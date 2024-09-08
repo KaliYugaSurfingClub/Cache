@@ -9,12 +9,13 @@ var ErrorNoSuchKey = errors.New("no such key")
 
 type Store struct {
 	sync.RWMutex
-	data map[string]string
+	data map[string][]byte
 }
 
-var store = Store{data: make(map[string]string)}
+var store = Store{data: make(map[string][]byte)}
 
-func Put(key string, value string) error {
+// todo return error?
+func Put(key string, value []byte) error {
 	store.Lock()
 	defer store.Unlock()
 
@@ -22,7 +23,7 @@ func Put(key string, value string) error {
 	return nil
 }
 
-func Get(key string) (string, error) {
+func Get(key string) ([]byte, error) {
 	//произвольное кол-во может удерживать RLock и читать
 	//но если кто-то держит Lock то это функция будет ждать пока блокировка на запись закончиться
 	store.RLock()
@@ -30,12 +31,13 @@ func Get(key string) (string, error) {
 
 	value, ok := store.data[key]
 	if !ok {
-		return "", ErrorNoSuchKey
+		return nil, ErrorNoSuchKey
 	}
 
 	return value, nil
 }
 
+// todo return error?
 func Delete(key string) error {
 	store.Lock()
 	defer store.Unlock()

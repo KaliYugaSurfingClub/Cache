@@ -3,9 +3,12 @@ package transaction
 import (
 	"fmt"
 	"os"
+	"sync"
 )
 
 type FileLogger struct {
+	wg *sync.WaitGroup
+
 	events       chan<- Event
 	errs         <-chan error
 	file         *os.File
@@ -22,15 +25,21 @@ func NewFileLogger(filename string) (Logger, error) {
 }
 
 func (tl *FileLogger) WritePut(key string, value []byte) {
+	tl.wg.Add(1)
 	tl.events <- Event{Type: EventPut, Key: key, Value: value}
 }
 
 func (tl *FileLogger) WriteDelete(key string) {
+	tl.wg.Add(1)
 	tl.events <- Event{Type: EventDelete, Key: key}
 }
 
 func (tl *FileLogger) ErrCh() <-chan error {
 	return tl.errs
+}
+
+func (tl *FileLogger) Wait() {
+	tl.wg.Wait()
 }
 
 func (tl *FileLogger) Start() {
@@ -60,8 +69,20 @@ func (tl *FileLogger) Start() {
 				errs <- err
 				return
 			}
+
+			tl.wg.Done()
 		}
 	}()
+}
+
+func (tl *FileLogger) Close() error {
+	tl.Wait()
+
+	if tl.events != nil {
+		close(tl.events)
+	}
+
+	return tl.file.Close()
 }
 
 func (tl *FileLogger) ReadEvents() (<-chan Event, <-chan error) {

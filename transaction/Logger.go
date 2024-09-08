@@ -18,6 +18,7 @@ type Logger interface {
 	WritePut(key string, value []byte)
 	WriteDelete(key string)
 	ReadEvents() (<-chan Event, <-chan error)
-	Start()
 	ErrCh() <-chan error
+	Start()
+	Close() error
 }

@@ -7,29 +7,52 @@ import (
 
 var ErrorNoSuchKey = errors.New("no such key")
 
+type EventType byte
+
+const (
+	EventDelete EventType = iota
+	EventPut
+)
+
+type Event struct {
+	Sequence uint64
+	Type     EventType
+	Key      string
+	Value    []byte
+}
+
+type transactionLogger interface {
+	WritePut(key string, value []byte)
+	WriteDelete(key string)
+	ReadEvents() (<-chan Event, <-chan error)
+	Close() error
+	Start()
+}
+
 type Store struct {
 	sync.RWMutex
 	data map[string][]byte
+	tl   transactionLogger
 }
 
-var store = Store{data: make(map[string][]byte)}
-
-// todo return error?
-func Put(key string, value []byte) error {
-	store.Lock()
-	defer store.Unlock()
-
-	store.data[key] = value
-	return nil
+func NewStore() *Store {
+	return &Store{
+		data: make(map[string][]byte),
+		tl:   &ZeroLogger{},
+	}
 }
 
-func Get(key string) ([]byte, error) {
-	//произвольное кол-во может удерживать RLock и читать
-	//но если кто-то держит Lock то это функция будет ждать пока блокировка на запись закончиться
-	store.RLock()
-	defer store.RUnlock()
+// todo maybe refactor
+func (s *Store) WithTransactionLogger(tl transactionLogger) *Store {
+	s.tl = tl
+	return s
+}
 
-	value, ok := store.data[key]
+func (s *Store) Get(key string) ([]byte, error) {
+	s.RLock()
+	defer s.RUnlock()
+
+	value, ok := s.data[key]
 	if !ok {
 		return nil, ErrorNoSuchKey
 	}
@@ -37,11 +60,53 @@ func Get(key string) ([]byte, error) {
 	return value, nil
 }
 
-// todo return error?
-func Delete(key string) error {
-	store.Lock()
-	defer store.Unlock()
+func (s *Store) Put(key string, value []byte) {
+	s.Lock()
+	defer s.Unlock()
 
-	delete(store.data, key)
-	return nil
+	s.data[key] = value
+	s.tl.WritePut(key, value)
 }
+
+func (s *Store) Delete(key string) {
+	s.Lock()
+	defer s.Unlock()
+
+	delete(s.data, key)
+	s.tl.WriteDelete(key)
+}
+
+//func (s *Store) Restore() error {
+//	events, errs := s.tl.ReadEvents()
+//
+//	var ok = true
+//	var err error = nil
+//	var event Event
+//
+//	for ok && err == nil {
+//		select {
+//		//ok == false means channel was closed
+//		case err, ok = <-errs:
+//		case event, ok = <-events:
+//			switch event.Type {
+//			case EventPut:
+//				s.Put(event.Key, event.Value)
+//			case EventDelete:
+//				s.Delete(event.Key)
+//			}
+//		}
+//	}
+//
+//	s.tl.Start()
+//
+//	return err
+//}
+
+type ZeroLogger struct{}
+
+func (tl *ZeroLogger) WritePut(key string, value []byte)        {}
+func (tl *ZeroLogger) WriteDelete(key string)                   {}
+func (tl *ZeroLogger) ReadEvents() (<-chan Event, <-chan error) { return nil, nil }
+func (tl *ZeroLogger) ErrCh() <-chan error                      { return nil }
+func (tl *ZeroLogger) Start()                                   {}
+func (tl *ZeroLogger) Close() error                             { return nil }

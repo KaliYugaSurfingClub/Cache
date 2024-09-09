@@ -1,51 +1,52 @@
 package transaction
 
 import (
-	"bytes"
+	"cache/core"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
+	"os"
 )
 
-func encodeFirstString(bytes []byte, buf *bytes.Buffer) error {
-	length := len(bytes)
+func encodeString(w *os.File, bytes []byte) error {
+	length := uint8(len(bytes))
 	if length > 255 {
 		return errors.New("key length exceeds 255 characters")
 	}
-	if err := buf.WriteByte(byte(length)); err != nil {
+	if err := binary.Write(w, binary.LittleEndian, length); err != nil {
 		return err
 	}
-	if _, err := buf.Write(bytes); err != nil {
+	if _, err := w.Write(bytes); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func encodeEvent(e *Event) ([]byte, error) {
-	buf := bytes.NewBuffer(nil)
-
-	if err := binary.Write(buf, binary.LittleEndian, e.Sequence); err != nil {
-		return nil, err
+func encodeEvent(e core.Event, w *os.File) error {
+	if err := binary.Write(w, binary.LittleEndian, e.Sequence); err != nil {
+		return err
 	}
 
-	if err := binary.Write(buf, binary.LittleEndian, e.Type); err != nil {
-		return nil, err
+	if err := binary.Write(w, binary.LittleEndian, e.Type); err != nil {
+		return err
 	}
 
-	if err := encodeFirstString([]byte(e.Key), buf); err != nil {
-		return nil, err
+	if err := encodeString(w, []byte(e.Key)); err != nil {
+		return err
 	}
 
-	if err := encodeFirstString(e.Value, buf); err != nil {
-		return nil, err
+	if err := encodeString(w, e.Value); err != nil {
+		return err
 	}
-	return buf.Bytes(), nil
+
+	return nil
 }
 
-func decodeFirstString(reader *bytes.Reader) ([]byte, error) {
-	length, err := reader.ReadByte()
-	if err != nil {
+func decodeFirstString(r io.Reader) ([]byte, error) {
+	var length uint8
+	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return nil, err
 	}
 
@@ -54,48 +55,38 @@ func decodeFirstString(reader *bytes.Reader) ([]byte, error) {
 	}
 
 	str := make([]byte, length)
-	if _, err := reader.Read(str); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &str); err != nil {
 		return nil, err
 	}
 
 	return str, nil
 }
 
-func decodeEvents(data []byte, events chan<- Event, errs chan<- error) {
-	buf := bytes.NewReader(data)
+func decodeEvent(r io.Reader) (core.Event, error) {
+	e := core.Event{}
 
-	for buf.Len() > 0 {
-		e := Event{}
-
-		//todo wrap errors
-		if err := binary.Read(buf, binary.LittleEndian, &e.Sequence); err != nil {
-			errs <- err
-			return
-		}
-
-		typeByte, err := buf.ReadByte()
-		if err != nil {
-			errs <- err
-			return
-		}
-
-		e.Type = EventType(typeByte)
-
-		keyBytes, err := decodeFirstString(buf)
-		if err != nil {
-			errs <- err
-			return
-		}
-
-		e.Key = string(keyBytes)
-
-		if e.Value, err = decodeFirstString(buf); err != nil {
-			errs <- err
-			return
-		}
-
-		fmt.Println(e)
-
-		events <- e
+	//todo wrap errors
+	if err := binary.Read(r, binary.LittleEndian, &e.Sequence); err != nil {
+		return e, err
 	}
+
+	if err := binary.Read(r, binary.LittleEndian, &e.Type); err != nil {
+		return e, err
+	}
+
+	//todo refactor
+	keyBytes, err := decodeFirstString(r)
+	if err != nil {
+		return e, err
+	}
+
+	e.Key = string(keyBytes)
+
+	if e.Value, err = decodeFirstString(r); err != nil {
+		return e, err
+	}
+
+	fmt.Println(e)
+
+	return e, nil
 }

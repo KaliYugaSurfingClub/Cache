@@ -1,49 +1,52 @@
 package transaction
 
 import (
+	"cache/core"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 )
 
-type FileLogger struct {
+type Logger struct {
 	wg *sync.WaitGroup
 
-	events       chan<- Event
+	events       chan<- core.Event
 	errs         <-chan error
 	file         *os.File
 	lastSequence uint64
 }
 
-func NewFileLogger(filename string) (Logger, error) {
+func NewFileLogger(filename string) (*Logger, error) {
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, err
 	}
 
-	return &FileLogger{file: file}, nil
+	return &Logger{file: file, wg: &sync.WaitGroup{}}, nil
 }
 
-func (tl *FileLogger) WritePut(key string, value []byte) {
+func (tl *Logger) WritePut(key string, value []byte) {
 	tl.wg.Add(1)
-	tl.events <- Event{Type: EventPut, Key: key, Value: value}
+	tl.events <- core.Event{Type: core.EventPut, Key: key, Value: value}
 }
 
-func (tl *FileLogger) WriteDelete(key string) {
+func (tl *Logger) WriteDelete(key string) {
 	tl.wg.Add(1)
-	tl.events <- Event{Type: EventDelete, Key: key}
+	tl.events <- core.Event{Type: core.EventDelete, Key: key}
 }
 
-func (tl *FileLogger) ErrCh() <-chan error {
+func (tl *Logger) ErrCh() <-chan error {
 	return tl.errs
 }
 
-func (tl *FileLogger) Wait() {
+func (tl *Logger) Wait() {
 	tl.wg.Wait()
 }
 
-func (tl *FileLogger) Start() {
-	events := make(chan Event) //todo buffer 16
+func (tl *Logger) Start() {
+	events := make(chan core.Event) //todo buffer 16
 	tl.events = events
 
 	errs := make(chan error) //todo buffer 1
@@ -53,19 +56,15 @@ func (tl *FileLogger) Start() {
 		//always read from events channel, Somebody who write to this channel is
 		//responsible for closing it at the right time
 		for e := range events {
-			tl.lastSequence++ //todo first log with id = 1 and maybe current instead last
+			tl.lastSequence++ //todo first log with id = 1 and maybe do current instead last
 			e.Sequence = tl.lastSequence
 
-			eventBytes, err := encodeEvent(&e)
+			fmt.Println("try to write", e)
+
+			//todo cant write twice in a row
+			err := encodeEvent(e, tl.file)
 			if err != nil {
-				errs <- err
-			}
-
-			fmt.Println(eventBytes)
-
-			_, err = tl.file.Write(eventBytes)
-
-			if err != nil { //todo this errors do not handled
+				fmt.Println(err)
 				errs <- err
 				return
 			}
@@ -75,7 +74,7 @@ func (tl *FileLogger) Start() {
 	}()
 }
 
-func (tl *FileLogger) Close() error {
+func (tl *Logger) Close() error {
 	tl.Wait()
 
 	if tl.events != nil {
@@ -85,10 +84,10 @@ func (tl *FileLogger) Close() error {
 	return tl.file.Close()
 }
 
-func (tl *FileLogger) ReadEvents() (<-chan Event, <-chan error) {
-	outEvent := make(chan Event)
-	//todo buffer 1
-	outError := make(chan error)
+// todo maybe take instance of store and fill it
+func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
+	outEvent := make(chan core.Event)
+	outError := make(chan error) //todo buffer 1
 
 	go func() {
 		//this goroutine writes to this channel and responsible for closing it
@@ -97,14 +96,27 @@ func (tl *FileLogger) ReadEvents() (<-chan Event, <-chan error) {
 		defer close(outEvent)
 		//deadlock without close
 
-		//todo do not read all file read to delim and send event
-		eventsBytes, err := os.ReadFile("logs.bin")
-		if err != nil {
-			outError <- fmt.Errorf("error reading logs.bin: %s", err)
-			return
-		}
+		for {
+			event, err := decodeEvent(tl.file)
+			if errors.Is(err, io.EOF) {
+				fmt.Println("EOF")
+				return
+			}
+			if err != nil {
+				fmt.Println("read err")
+				outError <- err
+				return
+			}
 
-		decodeEvents(eventsBytes, outEvent, outError)
+			if tl.lastSequence >= event.Sequence {
+				outError <- fmt.Errorf("transaction numbers out of sequence")
+				return
+			}
+
+			tl.lastSequence = event.Sequence
+			fmt.Println("read event", event)
+			outEvent <- event
+		}
 	}()
 
 	return outEvent, outError

@@ -76,7 +76,7 @@ func (s *Store) Delete(key string) {
 	s.tl.WriteDelete(key)
 }
 
-func (s *Store) Restore() {
+func (s *Store) Start() {
 	events, readingErrs := s.tl.ReadEvents()
 
 	go func() {
@@ -93,6 +93,8 @@ func (s *Store) Restore() {
 		}
 	}()
 
+	//todo if error is critical finish readEvents
+	//use context
 	go func() {
 		for err := range readingErrs {
 			log.Println(err)

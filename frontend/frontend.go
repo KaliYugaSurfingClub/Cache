@@ -29,8 +29,6 @@ func (f *Rest) Run() {
 }
 
 func (f *Rest) KeyValueGetHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("get handler")
-
 	key := mux.Vars(r)["key"]
 
 	value, err := f.store.Get(key)
@@ -39,19 +37,20 @@ func (f *Rest) KeyValueGetHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 		return
 	}
+
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		fmt.Println(err)
 		return
 	}
-
-	//todo
-	w.Write(value)
+	if _, err = w.Write(value); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		fmt.Println(err)
+		return
+	}
 }
 
 func (f *Rest) KeyValuePutHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("put handler")
-
 	key := mux.Vars(r)["key"]
 
 	value, err := io.ReadAll(r.Body)
@@ -68,8 +67,6 @@ func (f *Rest) KeyValuePutHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (f *Rest) KeyValueDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("delete handler")
 	key := mux.Vars(r)["key"]
-	//todo key == ""
 	f.store.Delete(key)
 }

@@ -27,6 +27,7 @@ func NewFileLogger(filename string) (*Logger, error) {
 	return &Logger{file: file, wg: &sync.WaitGroup{}}, nil
 }
 
+// todo only one method write
 func (tl *Logger) WritePut(key string, value []byte) {
 	tl.wg.Add(1)
 	tl.events <- core.Event{Type: core.EventPut, Key: key, Value: value}
@@ -46,10 +47,10 @@ func (tl *Logger) Wait() {
 }
 
 func (tl *Logger) Start() {
-	events := make(chan core.Event, 1) //todo buffer 16
-	tl.events = events
+	events := make(chan core.Event)
+	errs := make(chan error)
 
-	errs := make(chan error, 1) //todo buffer 1
+	tl.events = events
 	tl.errs = errs
 
 	go func() {
@@ -59,12 +60,11 @@ func (tl *Logger) Start() {
 			tl.lastSequence++ //todo first log with id = 1 and maybe do current instead last
 			e.Sequence = tl.lastSequence
 
-			fmt.Println("try to write", e)
+			//todo catch critical errors and stop non-critical continue
+			//todo HARD
+			err := writeEvent(tl.file, e)
 
-			//todo cant write twice in a row
-			err := encodeEvent(e, tl.file)
 			if err != nil {
-				fmt.Println(err)
 				errs <- err
 				return
 			}
@@ -84,10 +84,9 @@ func (tl *Logger) Close() error {
 	return tl.file.Close()
 }
 
-// todo maybe take instance of store and fill it
 func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
-	outEvent := make(chan core.Event, 1)
-	outError := make(chan error, 1) //todo buffer 1
+	outEvent := make(chan core.Event)
+	outError := make(chan error)
 
 	go func() {
 		//this goroutine writes to this channel and responsible for closing it
@@ -97,13 +96,11 @@ func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
 		//deadlock without close
 
 		for {
-			event, err := decodeEvent(tl.file)
+			event, err := readEvent(tl.file)
 			if errors.Is(err, io.EOF) {
-				fmt.Println("EOF")
 				return
 			}
 			if err != nil {
-				fmt.Println("read err")
 				outError <- err
 				return
 			}
@@ -114,7 +111,6 @@ func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
 			}
 
 			tl.lastSequence = event.Sequence
-			fmt.Println("read event", event)
 			outEvent <- event
 		}
 	}()

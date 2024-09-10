@@ -24,9 +24,10 @@ type Event struct {
 type transactionLogger interface {
 	WritePut(key string, value []byte)
 	WriteDelete(key string)
+	ErrCh() <-chan error
 	ReadEvents() (<-chan Event, <-chan error)
-	Close() error
 	Start()
+	Close() error
 }
 
 type Store struct {
@@ -42,7 +43,6 @@ func NewStore() *Store {
 	}
 }
 
-// todo maybe refactor
 func (s *Store) WithTransactionLogger(tl transactionLogger) *Store {
 	s.tl = tl
 	return s
@@ -89,12 +89,19 @@ func (s *Store) Restore() error {
 		case event, ok = <-events:
 			switch event.Type {
 			case EventPut:
+				//todo
 				s.data[event.Key] = event.Value
 			case EventDelete:
+				//todo
 				delete(s.data, event.Key)
 			}
 		}
 	}
+
+	//todo read errors
+	go func() {
+
+	}()
 
 	s.tl.Start()
 

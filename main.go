@@ -6,7 +6,6 @@ import (
 	"cache/transaction"
 )
 
-// todo do not catch errors from tl.errs
 func main() {
 	tl, err := transaction.NewFileLogger("logs.bin")
 	if err != nil {
@@ -17,10 +16,7 @@ func main() {
 	//defer store.Close()
 
 	store := core.NewStore().WithTransactionLogger(tl)
-
-	if err := store.Restore(); err != nil {
-		panic(err)
-	}
+	store.Restore()
 
 	front := frontend.NewRest(store)
 	front.Run()

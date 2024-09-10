@@ -47,7 +47,7 @@ func writingErrorf(field string, err error) error {
 }
 
 func writeEvent(w io.Writer, e core.Event) error {
-	if err := binary.Write(w, binary.LittleEndian, e.Sequence); err != nil {
+	if err := binary.Write(w, binary.LittleEndian, e.ID); err != nil {
 		return writingErrorf("id", err)
 	}
 
@@ -73,7 +73,7 @@ func readingErrorf(field string, err error) error {
 func readEvent(r io.Reader) (core.Event, error) {
 	e := core.Event{}
 
-	if err := binary.Read(r, binary.LittleEndian, &e.Sequence); err != nil {
+	if err := binary.Read(r, binary.LittleEndian, &e.ID); err != nil {
 		return e, readingErrorf("id", err)
 	}
 

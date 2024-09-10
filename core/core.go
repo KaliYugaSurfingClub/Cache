@@ -2,6 +2,7 @@ package core
 
 import (
 	"errors"
+	"log"
 	"sync"
 )
 
@@ -15,18 +16,17 @@ const (
 )
 
 type Event struct {
-	Sequence uint64
-	Type     EventType
-	Key      string
-	Value    []byte
+	ID    uint64
+	Type  EventType
+	Key   string
+	Value []byte
 }
 
 type transactionLogger interface {
 	WritePut(key string, value []byte)
 	WriteDelete(key string)
-	ErrCh() <-chan error
 	ReadEvents() (<-chan Event, <-chan error)
-	Start()
+	Start() <-chan error
 	Close() error
 }
 
@@ -76,36 +76,37 @@ func (s *Store) Delete(key string) {
 	s.tl.WriteDelete(key)
 }
 
-func (s *Store) Restore() error {
-	events, errs := s.tl.ReadEvents()
+func (s *Store) Restore() {
+	events, readingErrs := s.tl.ReadEvents()
 
-	var ok = true
-	var err error = nil
-	var event Event
+	go func() {
+		s.Lock()
+		defer s.Unlock()
 
-	for ok && err == nil {
-		select {
-		case err, ok = <-errs:
-		case event, ok = <-events:
+		for event := range events {
 			switch event.Type {
 			case EventPut:
-				//todo
 				s.data[event.Key] = event.Value
 			case EventDelete:
-				//todo
 				delete(s.data, event.Key)
 			}
 		}
-	}
-
-	//todo read errors
-	go func() {
-
 	}()
 
-	s.tl.Start()
+	go func() {
+		for err := range readingErrs {
+			log.Println(err)
+		}
+	}()
 
-	return err
+	runtimeErrs := s.tl.Start()
+
+	//todo if err is critical shutdown (maybe)
+	go func() {
+		for err := range runtimeErrs {
+			log.Print(err)
+		}
+	}()
 }
 
 type ZeroLogger struct{}
@@ -113,6 +114,5 @@ type ZeroLogger struct{}
 func (tl *ZeroLogger) WritePut(key string, value []byte)        {}
 func (tl *ZeroLogger) WriteDelete(key string)                   {}
 func (tl *ZeroLogger) ReadEvents() (<-chan Event, <-chan error) { return nil, nil }
-func (tl *ZeroLogger) ErrCh() <-chan error                      { return nil }
-func (tl *ZeroLogger) Start()                                   {}
+func (tl *ZeroLogger) Start() <-chan error                      { return nil }
 func (tl *ZeroLogger) Close() error                             { return nil }

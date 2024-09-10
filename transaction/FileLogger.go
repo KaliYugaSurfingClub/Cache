@@ -12,10 +12,9 @@ import (
 type Logger struct {
 	wg *sync.WaitGroup
 
-	events       chan<- core.Event
-	errs         <-chan error
-	file         *os.File
-	lastSequence uint64
+	events    chan<- core.Event
+	file      *os.File
+	currentID uint64
 }
 
 func NewFileLogger(filename string) (*Logger, error) {
@@ -27,7 +26,6 @@ func NewFileLogger(filename string) (*Logger, error) {
 	return &Logger{file: file, wg: &sync.WaitGroup{}}, nil
 }
 
-// todo only one method write
 func (tl *Logger) WritePut(key string, value []byte) {
 	tl.wg.Add(1)
 	tl.events <- core.Event{Type: core.EventPut, Key: key, Value: value}
@@ -38,50 +36,8 @@ func (tl *Logger) WriteDelete(key string) {
 	tl.events <- core.Event{Type: core.EventDelete, Key: key}
 }
 
-func (tl *Logger) ErrCh() <-chan error {
-	return tl.errs
-}
-
 func (tl *Logger) Wait() {
 	tl.wg.Wait()
-}
-
-func (tl *Logger) Start() {
-	events := make(chan core.Event)
-	errs := make(chan error)
-
-	tl.events = events
-	tl.errs = errs
-
-	go func() {
-		//always read from events channel, Somebody who write to this channel is
-		//responsible for closing it at the right time
-		for e := range events {
-			tl.lastSequence++ //todo first log with id = 1 and maybe do current instead last
-			e.Sequence = tl.lastSequence
-
-			//todo catch critical errors and stop non-critical continue
-			//todo HARD
-			err := writeEvent(tl.file, e)
-
-			if err != nil {
-				errs <- err
-				return
-			}
-
-			tl.wg.Done()
-		}
-	}()
-}
-
-func (tl *Logger) Close() error {
-	tl.Wait()
-
-	if tl.events != nil {
-		close(tl.events)
-	}
-
-	return tl.file.Close()
 }
 
 func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
@@ -102,18 +58,54 @@ func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
 			}
 			if err != nil {
 				outError <- err
-				return
 			}
 
-			if tl.lastSequence >= event.Sequence {
+			if tl.currentID > event.ID {
 				outError <- fmt.Errorf("transaction numbers out of sequence")
-				return
 			}
 
-			tl.lastSequence = event.Sequence
+			tl.currentID = event.ID
 			outEvent <- event
 		}
 	}()
 
 	return outEvent, outError
+}
+
+func (tl *Logger) Start() <-chan error {
+	events := make(chan core.Event)
+	errs := make(chan error)
+
+	tl.events = events
+
+	go func() {
+		//todo defer close(events, errs)
+		//always read from events channel, Somebody who write to this channel is
+		//responsible for closing it at the right time
+		for e := range events {
+			e.ID = tl.currentID
+			tl.currentID++
+
+			err := writeEvent(tl.file, e)
+			tl.wg.Done()
+
+			if err != nil {
+				errs <- err
+				//todo finish with context
+				return
+			}
+		}
+	}()
+
+	return errs
+}
+
+func (tl *Logger) Close() error {
+	tl.Wait()
+
+	if tl.events != nil {
+		close(tl.events)
+	}
+
+	return tl.file.Close()
 }

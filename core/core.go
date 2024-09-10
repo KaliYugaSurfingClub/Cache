@@ -76,31 +76,30 @@ func (s *Store) Delete(key string) {
 	s.tl.WriteDelete(key)
 }
 
-//func (s *Store) Restore() error {
-//	events, errs := s.tl.ReadEvents()
-//
-//	var ok = true
-//	var err error = nil
-//	var event Event
-//
-//	for ok && err == nil {
-//		select {
-//		//ok == false means channel was closed
-//		case err, ok = <-errs:
-//		case event, ok = <-events:
-//			switch event.Type {
-//			case EventPut:
-//				s.Put(event.Key, event.Value)
-//			case EventDelete:
-//				s.Delete(event.Key)
-//			}
-//		}
-//	}
-//
-//	s.tl.Start()
-//
-//	return err
-//}
+func (s *Store) Restore() error {
+	events, errs := s.tl.ReadEvents()
+
+	var ok = true
+	var err error = nil
+	var event Event
+
+	for ok && err == nil {
+		select {
+		case err, ok = <-errs:
+		case event, ok = <-events:
+			switch event.Type {
+			case EventPut:
+				s.data[event.Key] = event.Value
+			case EventDelete:
+				delete(s.data, event.Key)
+			}
+		}
+	}
+
+	s.tl.Start()
+
+	return err
+}
 
 type ZeroLogger struct{}
 

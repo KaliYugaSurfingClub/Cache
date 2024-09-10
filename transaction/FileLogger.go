@@ -46,10 +46,10 @@ func (tl *Logger) Wait() {
 }
 
 func (tl *Logger) Start() {
-	events := make(chan core.Event) //todo buffer 16
+	events := make(chan core.Event, 1) //todo buffer 16
 	tl.events = events
 
-	errs := make(chan error) //todo buffer 1
+	errs := make(chan error, 1) //todo buffer 1
 	tl.errs = errs
 
 	go func() {
@@ -86,8 +86,8 @@ func (tl *Logger) Close() error {
 
 // todo maybe take instance of store and fill it
 func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
-	outEvent := make(chan core.Event)
-	outError := make(chan error) //todo buffer 1
+	outEvent := make(chan core.Event, 1)
+	outError := make(chan error, 1) //todo buffer 1
 
 	go func() {
 		//this goroutine writes to this channel and responsible for closing it

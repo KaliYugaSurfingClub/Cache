@@ -4,7 +4,6 @@ import (
 	"cache/core"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 )
@@ -85,8 +84,6 @@ func decodeEvent(r io.Reader) (core.Event, error) {
 	if e.Value, err = decodeFirstString(r); err != nil {
 		return e, err
 	}
-
-	fmt.Println(e)
 
 	return e, nil
 }

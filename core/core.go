@@ -93,6 +93,8 @@ func (s *Store) Restore() {
 		}
 	}()
 
+	//todo if error is critical finish readEvents
+	//use context
 	go func() {
 		for err := range readingErrs {
 			log.Println(err)

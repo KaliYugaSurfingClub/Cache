@@ -12,9 +12,6 @@ func main() {
 		panic(err)
 	}
 
-	//todo check is it work with hard shutdown
-	//defer store.Close()
-
 	store := core.NewStore().WithTransactionLogger(tl)
 	store.Restore()
 

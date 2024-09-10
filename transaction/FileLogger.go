@@ -101,6 +101,8 @@ func (tl *Logger) Start() <-chan error {
 }
 
 func (tl *Logger) Close() error {
+	fmt.Println("close logger")
+
 	tl.Wait()
 
 	if tl.events != nil {

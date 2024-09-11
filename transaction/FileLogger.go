@@ -2,11 +2,13 @@ package transaction
 
 import (
 	"cache/core"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"sync"
+	"time"
 )
 
 type Logger struct {
@@ -26,6 +28,7 @@ func NewFileLogger(filename string) (*Logger, error) {
 	return &Logger{file: file, wg: &sync.WaitGroup{}}, nil
 }
 
+// todo what will happens if i will write at the shutdown time
 func (tl *Logger) WritePut(key string, value []byte) {
 	tl.wg.Add(1)
 	tl.events <- core.Event{Type: core.EventPut, Key: key, Value: value}
@@ -49,10 +52,13 @@ func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
 		//after it writes everything
 		defer close(outError)
 		defer close(outEvent)
-		//deadlock without close
 
 		for {
 			event, err := readEvent(tl.file)
+
+			//todo debug
+			time.Sleep(1 * time.Minute)
+
 			if errors.Is(err, io.EOF) {
 				return
 			}
@@ -79,7 +85,7 @@ func (tl *Logger) Start() <-chan error {
 	tl.events = events
 
 	go func() {
-		//todo defer close(events, errs)
+		//todo defer close(errs)
 		//always read from events channel, Somebody who write to this channel is
 		//responsible for closing it at the right time
 		for e := range events {
@@ -100,14 +106,29 @@ func (tl *Logger) Start() <-chan error {
 	return errs
 }
 
-func (tl *Logger) Close() error {
-	fmt.Println("close logger")
+func (tl *Logger) Shutdown(ctx context.Context) error {
+	errs := make(chan error)
 
-	tl.Wait()
+	go func() {
+		defer close(errs)
 
-	if tl.events != nil {
-		close(tl.events)
+		tl.Wait()
+
+		if tl.events != nil {
+			close(tl.events)
+		}
+
+		if err := tl.file.Close(); err != nil {
+			errs <- err
+		}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("shutdown logger was cancelled: %w", ctx.Err())
+	case err := <-errs:
+		return fmt.Errorf("shutdown logger was faild: %w", err)
+	default:
+		return nil
 	}
-
-	return tl.file.Close()
 }

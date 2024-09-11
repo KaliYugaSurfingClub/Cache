@@ -1,7 +1,9 @@
 package core
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log"
 	"sync"
 )
@@ -27,7 +29,7 @@ type transactionLogger interface {
 	WriteDelete(key string)
 	ReadEvents() (<-chan Event, <-chan error)
 	Start() <-chan error
-	Close() error
+	Shutdown(ctx context.Context) error
 }
 
 type Store struct {
@@ -64,6 +66,9 @@ func (s *Store) Put(key string, value []byte) {
 	s.Lock()
 	defer s.Unlock()
 
+	//todo debug
+	fmt.Println("write", key)
+
 	s.data[key] = value
 	s.tl.WritePut(key, value)
 }
@@ -84,6 +89,7 @@ func (s *Store) Start() {
 		defer s.Unlock()
 
 		for event := range events {
+			fmt.Println("read event", event)
 			switch event.Type {
 			case EventPut:
 				s.data[event.Key] = event.Value
@@ -117,4 +123,4 @@ func (tl *ZeroLogger) WritePut(key string, value []byte)        {}
 func (tl *ZeroLogger) WriteDelete(key string)                   {}
 func (tl *ZeroLogger) ReadEvents() (<-chan Event, <-chan error) { return nil, nil }
 func (tl *ZeroLogger) Start() <-chan error                      { return nil }
-func (tl *ZeroLogger) Close() error                             { return nil }
+func (tl *ZeroLogger) Shutdown(ctx context.Context) error       { return nil }

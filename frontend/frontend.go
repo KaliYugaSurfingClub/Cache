@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"github.com/gorilla/mux"
 	"io"
-	"log"
 	"net/http"
+	"time"
 )
 
 type Rest struct {
@@ -18,14 +18,25 @@ func NewRest(store *core.Store) *Rest {
 	return &Rest{store: store}
 }
 
-func (f *Rest) Run() {
+func (f *Rest) Start() *http.Server {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/v1/{key}", f.KeyValuePutHandler).Methods(http.MethodPut)
 	router.HandleFunc("/v1/{key}", f.KeyValueGetHandler).Methods(http.MethodGet)
 	router.HandleFunc("/v1/{key}", f.KeyValueDeleteHandler).Methods(http.MethodDelete)
 
-	log.Fatal(http.ListenAndServe(":8080", router))
+	s := http.Server{
+		Addr:    ":8080",
+		Handler: router,
+	}
+
+	go func() {
+		if err := s.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) && err != nil {
+			panic(err)
+		}
+	}()
+
+	return &s
 }
 
 func (f *Rest) KeyValueGetHandler(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +72,9 @@ func (f *Rest) KeyValuePutHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 		return
 	}
+
+	//todo debug
+	time.Sleep(1 * time.Minute)
 
 	f.store.Put(key, value)
 	w.WriteHeader(http.StatusCreated)

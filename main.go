@@ -4,8 +4,34 @@ import (
 	"cache/core"
 	"cache/frontend"
 	"cache/transaction"
+	"context"
+	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
+type Shutdownable interface {
+	Shutdown(ctx context.Context) error
+}
+
+func handelShutdown(ctx context.Context, services ...Shutdownable) {
+	sigs := make(chan os.Signal)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	<-sigs
+	fmt.Println("Shutting down ...")
+
+	for _, service := range services {
+		if err := service.Shutdown(ctx); err != nil {
+			fmt.Println("Error closing service:", err)
+		}
+	}
+}
+
+// todo what happens if I terminate program while reading events from file
+// the application simply closes the connection to the file, I suppose it is a safe behavior
 func main() {
 	tl, err := transaction.NewFileLogger("logs.bin")
 	if err != nil {
@@ -15,6 +41,10 @@ func main() {
 	store := core.NewStore().WithTransactionLogger(tl)
 	store.Start()
 
-	front := frontend.NewRest(store)
-	front.Run()
+	server := frontend.NewRest(store).Start()
+
+	ctx, _ := context.WithTimeout(context.Background(), 100000*time.Second)
+	//do not change order, because the server needs open channels to complete all work
+	//then we can close transactionLogger
+	handelShutdown(ctx, server, tl)
 }

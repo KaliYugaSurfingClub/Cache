@@ -15,9 +15,11 @@ func encodeString(w io.Writer, bytes []byte) error {
 	if len(bytes) > 255 {
 		return FieldIsTooLong
 	}
+
 	if err := binary.Write(w, binary.LittleEndian, uint8(len(bytes))); err != nil {
 		return err
 	}
+
 	if _, err := w.Write(bytes); err != nil {
 		return err
 	}
@@ -25,78 +27,73 @@ func encodeString(w io.Writer, bytes []byte) error {
 	return nil
 }
 
-func decodeString(r io.Reader) ([]byte, error) {
+func decodeString(r io.Reader, dest []byte) error {
 	var length uint8
 	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
-		return nil, err
+		return err
 	}
 
 	if length == 0 {
-		return nil, nil
+		return nil
 	}
 
-	str := make([]byte, length)
-	if err := binary.Read(r, binary.LittleEndian, &str); err != nil {
-		return nil, err
-	}
-
-	return str, nil
-}
-
-func writingErrorf(field string, err error) error {
-	return fmt.Errorf("write %s of event was faild: %w", field, err)
-}
-
-func writeEventTo(w io.Writer, e core.Event) error {
-	buff := bytes.NewBuffer([]byte{})
-
-	if err := binary.Write(buff, binary.LittleEndian, e.ID); err != nil {
-		return writingErrorf("id", err)
-	}
-
-	if err := binary.Write(buff, binary.LittleEndian, e.Type); err != nil {
-		return writingErrorf("type", err)
-	}
-
-	if err := encodeString(buff, []byte(e.Key)); err != nil {
-		return writingErrorf("key", err)
-	}
-
-	if err := encodeString(buff, e.Value); err != nil {
-		return writingErrorf("value", err)
-	}
-
-	if _, err := buff.WriteTo(w); err != nil {
-		return writingErrorf("all fields", err)
+	if err := binary.Read(r, binary.LittleEndian, dest); err != nil {
+		return err
 	}
 
 	return nil
 }
 
-func readingErrorf(field string, err error) error {
-	return fmt.Errorf("read %s of event was faild: %w", field, err)
+func writeEventTo(w io.Writer, e core.Event) error {
+	tmp := "write %s of event was failed: %w"
+
+	buff := bytes.NewBuffer([]byte{})
+
+	if err := binary.Write(buff, binary.LittleEndian, e.ID); err != nil {
+		return fmt.Errorf(tmp, "ID", err)
+	}
+
+	if err := binary.Write(buff, binary.LittleEndian, e.Type); err != nil {
+		return fmt.Errorf(tmp, "type", err)
+	}
+
+	if err := encodeString(buff, []byte(e.Key)); err != nil {
+		return fmt.Errorf(tmp, "key", err)
+	}
+
+	if err := encodeString(buff, e.Value); err != nil {
+		return fmt.Errorf(tmp, "value", err)
+	}
+
+	if _, err := buff.WriteTo(w); err != nil {
+		return fmt.Errorf(tmp, "all fields", err)
+	}
+
+	return nil
 }
 
 func readEvent(r io.Reader) (core.Event, error) {
+	tmp := "read %s of event was failed: %w"
+
 	e := core.Event{}
 
 	if err := binary.Read(r, binary.LittleEndian, &e.ID); err != nil {
-		return e, readingErrorf("id", err)
+		return e, fmt.Errorf(tmp, "id", err)
 	}
 
 	if err := binary.Read(r, binary.LittleEndian, &e.Type); err != nil {
-		return e, readingErrorf("type", err)
+		return e, fmt.Errorf(tmp, "type", err)
 	}
 
-	keyBytes, err := decodeString(r)
-	if err != nil {
-		return e, readingErrorf("key", err)
+	keyBuff := make([]byte, 0)
+	if err := decodeString(r, keyBuff); err != nil {
+		return e, fmt.Errorf(tmp, "key", err)
 	}
 
-	e.Key = string(keyBytes)
+	e.Key = string(keyBuff)
 
-	if e.Value, err = decodeString(r); err != nil {
-		return e, readingErrorf("value", err)
+	if err := decodeString(r, e.Value); err != nil {
+		return e, fmt.Errorf(tmp, "value", err)
 	}
 
 	return e, nil

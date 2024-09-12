@@ -90,7 +90,7 @@ func TestWriteAndREadEvents(t *testing.T) {
 			name: strings.Replace(c.name, "put", "delete", 1),
 			event: core.Event{
 				ID:    c.event.ID,
-				Type:  core.EventPut,
+				Type:  core.EventDelete,
 				Key:   c.event.Key,
 				Value: nil,
 			},
@@ -102,19 +102,22 @@ func TestWriteAndREadEvents(t *testing.T) {
 	mockFile := bytes.NewBuffer(nil)
 
 	for _, test := range cases {
-		err := writeEvent(mockFile, test.event)
-
-		if err != nil && !errors.Is(err, FieldIsTooLong) {
-			t.Errorf("test: %s, unexpected error while writing: %s", test.name, err)
+		writeError := writeEventTo(mockFile, test.event)
+		if writeError != nil && !errors.Is(writeError, FieldIsTooLong) {
+			t.Errorf("\ntest: %s\nunexpected error while writing: %s", test.name, writeError)
 		}
 
-		event, err := readEvent(mockFile)
-		if err != nil && errors.Is(err, io.EOF) {
-			t.Errorf("test: %s, unexpected error while reading: %s", test.name, err)
+		event, readError := readEvent(mockFile)
+		if readError != nil && !errors.Is(readError, io.EOF) {
+			t.Errorf("\ntest: %s\nunexpected error while reading: %s", test.name, readError)
 		}
 
-		if reflect.DeepEqual(test.event, event) == false {
-			t.Errorf("test: %s, expected event to be %v, \n got %v", test.name, test.event, event)
+		if writeError != nil && (mockFile.Len() != 0 || !errors.Is(readError, io.EOF)) {
+			t.Errorf("\ntest: %s\nunempty file buffer after writing error", test.name)
+		}
+
+		if test.badInput && !reflect.DeepEqual(test.event, event) {
+			t.Errorf("\ntest: %s\nexpected event to be %v\ngot %v", test.name, test.event, event)
 		}
 	}
 }

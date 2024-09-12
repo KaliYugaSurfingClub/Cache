@@ -1,6 +1,7 @@
 package transaction
 
 import (
+	"bytes"
 	"cache/core"
 	"encoding/binary"
 	"errors"
@@ -46,21 +47,27 @@ func writingErrorf(field string, err error) error {
 	return fmt.Errorf("write %s of event was faild: %w", field, err)
 }
 
-func writeEvent(w io.Writer, e core.Event) error {
-	if err := binary.Write(w, binary.LittleEndian, e.ID); err != nil {
+func writeEventTo(w io.Writer, e core.Event) error {
+	buff := bytes.NewBuffer([]byte{})
+
+	if err := binary.Write(buff, binary.LittleEndian, e.ID); err != nil {
 		return writingErrorf("id", err)
 	}
 
-	if err := binary.Write(w, binary.LittleEndian, e.Type); err != nil {
+	if err := binary.Write(buff, binary.LittleEndian, e.Type); err != nil {
 		return writingErrorf("type", err)
 	}
 
-	if err := encodeString(w, []byte(e.Key)); err != nil {
+	if err := encodeString(buff, []byte(e.Key)); err != nil {
 		return writingErrorf("key", err)
 	}
 
-	if err := encodeString(w, e.Value); err != nil {
+	if err := encodeString(buff, e.Value); err != nil {
 		return writingErrorf("value", err)
+	}
+
+	if _, err := buff.WriteTo(w); err != nil {
+		return writingErrorf("all fields", err)
 	}
 
 	return nil

@@ -92,7 +92,7 @@ func (tl *Logger) Start() <-chan error {
 			e.ID = tl.currentID
 			tl.currentID++
 
-			if err := writeEvent(tl.file, e); err != nil {
+			if err := writeEventTo(tl.file, e); err != nil {
 				errs <- err
 			}
 

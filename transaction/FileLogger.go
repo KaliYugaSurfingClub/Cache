@@ -85,21 +85,18 @@ func (tl *Logger) Start() <-chan error {
 	tl.events = events
 
 	go func() {
-		//todo defer close(errs)
+		defer close(errs)
 		//always read from events channel, Somebody who write to this channel is
 		//responsible for closing it at the right time
 		for e := range events {
 			e.ID = tl.currentID
 			tl.currentID++
 
-			err := writeEvent(tl.file, e)
-			tl.wg.Done()
-
-			if err != nil {
+			if err := writeEvent(tl.file, e); err != nil {
 				errs <- err
-				//todo finish with context
-				return
 			}
+
+			tl.wg.Done()
 		}
 	}()
 

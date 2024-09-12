@@ -12,12 +12,13 @@ import (
 	"time"
 )
 
-type Shutdownable interface {
+type ShutdownAble interface {
 	Shutdown(ctx context.Context) error
 }
 
-func handelShutdown(ctx context.Context, services ...Shutdownable) {
+func handelShutdown(ctx context.Context, services ...ShutdownAble) {
 	sigs := make(chan os.Signal)
+	//todo notify with context
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	<-sigs

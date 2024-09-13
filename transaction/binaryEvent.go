@@ -13,6 +13,7 @@ var ErrLongField = errors.New("field is too long")
 var ErrEmptyFile = errors.New("file is empty")
 
 func encodeString(w io.Writer, bytes []byte) error {
+	//todo remove literal move this limit to frontend
 	if len(bytes) > 255 {
 		return ErrLongField
 	}

@@ -24,7 +24,7 @@ type Event struct {
 	Value []byte
 }
 
-type transactionLogger interface {
+type TransactionLogger interface {
 	WritePut(key string, value []byte)
 	WriteDelete(key string)
 	ReadEvents() (<-chan Event, <-chan error)
@@ -35,17 +35,17 @@ type transactionLogger interface {
 type Store struct {
 	sync.RWMutex
 	data map[string][]byte
-	tl   transactionLogger
+	tl   TransactionLogger
 }
 
-func NewStore() *Store {
+func NewStore(tl TransactionLogger) *Store {
 	return &Store{
 		data: make(map[string][]byte),
-		tl:   &ZeroLogger{},
+		tl:   tl,
 	}
 }
 
-func (s *Store) WithTransactionLogger(tl transactionLogger) *Store {
+func (s *Store) WithTransactionLogger(tl TransactionLogger) *Store {
 	s.tl = tl
 	return s
 }
@@ -84,6 +84,7 @@ func (s *Store) Delete(key string) {
 func (s *Store) Start() {
 	events, readingErrs := s.tl.ReadEvents()
 
+	//todo maybe it is worth do not use goroutine for reading
 	go func() {
 		s.Lock()
 		defer s.Unlock()
@@ -116,11 +117,3 @@ func (s *Store) Start() {
 		}
 	}()
 }
-
-type ZeroLogger struct{}
-
-func (tl *ZeroLogger) WritePut(key string, value []byte)        {}
-func (tl *ZeroLogger) WriteDelete(key string)                   {}
-func (tl *ZeroLogger) ReadEvents() (<-chan Event, <-chan error) { return nil, nil }
-func (tl *ZeroLogger) Start() <-chan error                      { return nil }
-func (tl *ZeroLogger) Shutdown(ctx context.Context) error       { return nil }

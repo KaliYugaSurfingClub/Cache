@@ -111,8 +111,6 @@ func writeAndRead(t *testing.T, c Case) {
 		c.name, c.event, mockFileAfterWriting, writeErr, event, readErr,
 	)
 
-	//fmt.Println(info)
-
 	if writeErr != nil && !errors.Is(writeErr, ErrLongField) {
 		t.Errorf("unexpected error while writing" + info)
 	}

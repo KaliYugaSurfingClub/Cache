@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-type Logger struct {
+type FileLogger struct {
 	wg *sync.WaitGroup
 
 	events    chan<- core.Event
@@ -17,31 +17,43 @@ type Logger struct {
 	currentID uint64
 }
 
-func NewFileLogger(filename string) (*Logger, error) {
+type BackgroundLogger struct{}
+
+func (tl *BackgroundLogger) WritePut(key string, value []byte)             {}
+func (tl *BackgroundLogger) WriteDelete(key string)                        {}
+func (tl *BackgroundLogger) ReadEvents() (<-chan core.Event, <-chan error) { return nil, nil }
+func (tl *BackgroundLogger) Start() <-chan error                           { return nil }
+func (tl *BackgroundLogger) Shutdown(ctx context.Context) error            { return nil }
+
+func NewLogger(filename string) (core.TransactionLogger, error) {
+	if filename == "" {
+		return &BackgroundLogger{}, nil
+	}
+
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0755)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Logger{file: file, wg: &sync.WaitGroup{}}, nil
+	return &FileLogger{file: file, wg: &sync.WaitGroup{}}, nil
 }
 
 // todo what will happens if i will write at the shutdown time
-func (tl *Logger) WritePut(key string, value []byte) {
+func (tl *FileLogger) WritePut(key string, value []byte) {
 	tl.wg.Add(1)
 	tl.events <- core.Event{Type: core.EventPut, Key: key, Value: value}
 }
 
-func (tl *Logger) WriteDelete(key string) {
+func (tl *FileLogger) WriteDelete(key string) {
 	tl.wg.Add(1)
 	tl.events <- core.Event{Type: core.EventDelete, Key: key}
 }
 
-func (tl *Logger) Wait() {
+func (tl *FileLogger) Wait() {
 	tl.wg.Wait()
 }
 
-func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
+func (tl *FileLogger) ReadEvents() (<-chan core.Event, <-chan error) {
 	outEvent := make(chan core.Event)
 	outError := make(chan error)
 
@@ -53,13 +65,15 @@ func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
 
 		for {
 			event, err := readEvent(tl.file)
-
 			////todo debug
 			//time.Sleep(1 * time.Minute)
 
 			if errors.Is(err, ErrEmptyFile) {
 				return
 			}
+
+			fmt.Println(event)
+
 			if err != nil {
 				outError <- err
 			}
@@ -76,7 +90,7 @@ func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
 	return outEvent, outError
 }
 
-func (tl *Logger) Start() <-chan error {
+func (tl *FileLogger) Start() <-chan error {
 	//buffer 16 means that 16 handlers can send event and do not wait when logger write event to file
 	//todo remove literal
 	events := make(chan core.Event, 16)
@@ -86,7 +100,6 @@ func (tl *Logger) Start() <-chan error {
 
 	go func() {
 		defer close(errs)
-		defer close(events)
 		//always read from events channel, Somebody who write to this channel is
 		//responsible for closing it at the right time
 		for e := range events {
@@ -104,7 +117,7 @@ func (tl *Logger) Start() <-chan error {
 	return errs
 }
 
-func (tl *Logger) Shutdown(ctx context.Context) error {
+func (tl *FileLogger) Shutdown(ctx context.Context) error {
 	errs := make(chan error)
 
 	go func() {

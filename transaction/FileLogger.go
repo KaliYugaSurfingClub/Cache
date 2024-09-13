@@ -5,10 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"sync"
-	"time"
 )
 
 type Logger struct {
@@ -56,10 +54,10 @@ func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
 		for {
 			event, err := readEvent(tl.file)
 
-			//todo debug
-			time.Sleep(1 * time.Minute)
+			////todo debug
+			//time.Sleep(1 * time.Minute)
 
-			if errors.Is(err, io.EOF) {
+			if errors.Is(err, ErrEmptyFile) {
 				return
 			}
 			if err != nil {
@@ -79,13 +77,16 @@ func (tl *Logger) ReadEvents() (<-chan core.Event, <-chan error) {
 }
 
 func (tl *Logger) Start() <-chan error {
-	events := make(chan core.Event)
+	//buffer 16 means that 16 handlers can send event and do not wait when logger write event to file
+	//todo remove literal
+	events := make(chan core.Event, 16)
 	errs := make(chan error)
 
 	tl.events = events
 
 	go func() {
 		defer close(errs)
+		defer close(events)
 		//always read from events channel, Somebody who write to this channel is
 		//responsible for closing it at the right time
 		for e := range events {

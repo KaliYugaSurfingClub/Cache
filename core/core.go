@@ -66,8 +66,8 @@ func (s *Store) Put(key string, value []byte) {
 	s.Lock()
 	defer s.Unlock()
 
-	//todo debug
-	fmt.Println("write", key)
+	////todo debug
+	//fmt.Println("write", key)
 
 	s.data[key] = value
 	s.tl.WritePut(key, value)

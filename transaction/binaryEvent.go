@@ -9,11 +9,12 @@ import (
 	"io"
 )
 
-var FieldIsTooLong = errors.New("field is too long")
+var ErrLongField = errors.New("field is too long")
+var ErrEmptyFile = errors.New("file is empty")
 
 func encodeString(w io.Writer, bytes []byte) error {
 	if len(bytes) > 255 {
-		return FieldIsTooLong
+		return ErrLongField
 	}
 
 	if err := binary.Write(w, binary.LittleEndian, uint8(len(bytes))); err != nil {
@@ -27,7 +28,7 @@ func encodeString(w io.Writer, bytes []byte) error {
 	return nil
 }
 
-func decodeString(r io.Reader, dest []byte) error {
+func decodeString(r io.Reader, dest *[]byte) error {
 	var length uint8
 	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return err
@@ -37,7 +38,8 @@ func decodeString(r io.Reader, dest []byte) error {
 		return nil
 	}
 
-	if err := binary.Read(r, binary.LittleEndian, dest); err != nil {
+	*dest = make([]byte, length)
+	if err := binary.Read(r, binary.LittleEndian, *dest); err != nil {
 		return err
 	}
 
@@ -65,7 +67,7 @@ func writeEventTo(w io.Writer, e core.Event) error {
 		return fmt.Errorf(tmp, "value", err)
 	}
 
-	if _, err := buff.WriteTo(w); err != nil {
+	if err := binary.Write(w, binary.LittleEndian, buff.Bytes()); err != nil {
 		return fmt.Errorf(tmp, "all fields", err)
 	}
 
@@ -78,6 +80,10 @@ func readEvent(r io.Reader) (core.Event, error) {
 	e := core.Event{}
 
 	if err := binary.Read(r, binary.LittleEndian, &e.ID); err != nil {
+		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+			return e, ErrEmptyFile
+		}
+
 		return e, fmt.Errorf(tmp, "id", err)
 	}
 
@@ -85,14 +91,14 @@ func readEvent(r io.Reader) (core.Event, error) {
 		return e, fmt.Errorf(tmp, "type", err)
 	}
 
-	keyBuff := make([]byte, 0)
-	if err := decodeString(r, keyBuff); err != nil {
+	var keyBuff []byte
+	if err := decodeString(r, &keyBuff); err != nil {
 		return e, fmt.Errorf(tmp, "key", err)
 	}
 
 	e.Key = string(keyBuff)
 
-	if err := decodeString(r, e.Value); err != nil {
+	if err := decodeString(r, &e.Value); err != nil {
 		return e, fmt.Errorf(tmp, "value", err)
 	}
 

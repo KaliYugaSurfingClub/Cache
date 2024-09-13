@@ -7,7 +7,6 @@ import (
 	"github.com/gorilla/mux"
 	"io"
 	"net/http"
-	"time"
 )
 
 type Rest struct {
@@ -73,8 +72,8 @@ func (f *Rest) KeyValuePutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//todo debug
-	time.Sleep(1 * time.Minute)
+	////todo debug
+	//time.Sleep(1 * time.Minute)
 
 	f.store.Put(key, value)
 	w.WriteHeader(http.StatusCreated)

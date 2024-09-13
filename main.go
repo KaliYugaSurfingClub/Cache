@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
 
 type ShutdownAble interface {
@@ -33,6 +32,12 @@ func handelShutdown(ctx context.Context, services ...ShutdownAble) {
 
 // todo what happens if I terminate program while reading events from file
 // the application simply closes the connection to the file, I suppose it is a safe behavior
+
+//todo fix tests and check len of key and value in handlers or in core
+//do new method of encoding events
+//pass max len of key value thanks for config and do not use uint8 fo len
+
+// todo cant read events from file_)))))))))
 func main() {
 	tl, err := transaction.NewFileLogger("logs.bin")
 	if err != nil {
@@ -42,10 +47,14 @@ func main() {
 	store := core.NewStore().WithTransactionLogger(tl)
 	store.Start()
 
-	server := frontend.NewRest(store).Start()
+	_ = frontend.NewRest(store).Start()
 
-	ctx, _ := context.WithTimeout(context.Background(), 100000*time.Second)
+	for {
+
+	}
+
+	//ctx, _ := context.WithTimeout(context.Background(), 100000*time.Second)
 	//do not change order, because the server needs open channels to complete all work
 	//then we can close transactionLogger
-	handelShutdown(ctx, server, tl)
+	//handelShutdown(ctx, server, tl)
 }

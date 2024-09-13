@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cache/core"
 	"errors"
+	"fmt"
 	"reflect"
 	"slices"
 	"strings"
@@ -82,6 +83,7 @@ var cases = []Case{
 }
 
 func init() {
+	//transform all put cases to delete cases and add to slice of cases
 	for _, c := range slices.Clone(cases) {
 		newCase := Case{
 			name: strings.Replace(c.name, "put", "delete", 1),
@@ -97,32 +99,51 @@ func init() {
 	}
 }
 
-func TestWriteAndReadEvents(t *testing.T) {
-	for _, test := range cases {
-		mockFile := bytes.NewBuffer(nil)
+func writeAndRead(t *testing.T, c Case) {
+	mockFile := bytes.NewBuffer(nil)
+	writeErr := writeEventTo(mockFile, c.event)
 
-		wErr := writeEventTo(mockFile, test.event)
-		copyMockFile := mockFile.Bytes()
-		event, rErr := readEvent(mockFile)
+	mockFileAfterWriting := mockFile.Bytes()
+	event, readErr := readEvent(mockFile)
 
-		//fmt.Println(test.name)
-		//fmt.Println(test.event, copyMockFile, wErr)
-		//fmt.Println(event, rErr)
+	info := fmt.Sprintf(
+		"\ncase: %s\noriginal event: %v\nmock file after writing%v\nwriting error %s\ngot event: %v\n reading error %s",
+		c.name, c.event, mockFileAfterWriting, writeErr, event, readErr,
+	)
 
-		if wErr != nil && !errors.Is(wErr, ErrLongField) {
-			t.Errorf("\ntest: %s\nunexpected error while writing: %s", test.name, wErr)
-		}
+	//fmt.Println(info)
 
-		if rErr != nil && !errors.Is(rErr, ErrEmptyFile) {
-			t.Errorf("\ntest: %s\nunexpected error while reading: %s", test.name, rErr)
-		}
-
-		if wErr != nil && len(copyMockFile) != 0 {
-			t.Errorf("\ntest: %s\nunempty file buffer after writing error \nbuffer: %v", test.name, copyMockFile)
-		}
-
-		if wErr == nil && !reflect.DeepEqual(test.event, event) {
-			t.Errorf("\ntest: %s\nexpected event to be %v\ngot %v", test.name, test.event, event)
-		}
+	if writeErr != nil && !errors.Is(writeErr, ErrLongField) {
+		t.Errorf("unexpected error while writing" + info)
 	}
+
+	//we will get ErrEmptyFile, if we can not write
+	if readErr != nil && !errors.Is(readErr, ErrEmptyFile) {
+		t.Errorf("unexpected error while reading" + info)
+	}
+
+	//if we write with error, we should not mutate destination
+	if writeErr != nil && len(mockFileAfterWriting) != 0 {
+		t.Errorf("unempty file buffer after writing error" + info)
+	}
+
+	//if we write no error, wrote event and read event should be equal
+	if writeErr == nil && !reflect.DeepEqual(c.event, event) {
+		t.Errorf("expected event and got event are different" + info)
+	}
+}
+
+func FuzzWriteReadRestore(f *testing.F) {
+	for _, test := range cases {
+		f.Add(test.name, test.event.ID, byte(test.event.Type), test.event.Key, test.event.Value)
+	}
+
+	f.Fuzz(func(t *testing.T, name string, ID uint64, eventType byte, key string, value []byte) {
+		testCase := Case{
+			name:  name,
+			event: core.Event{ID: ID, Type: core.EventType(eventType), Key: key, Value: value},
+		}
+
+		writeAndRead(t, testCase)
+	})
 }

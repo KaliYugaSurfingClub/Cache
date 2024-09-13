@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 type ShutdownAble interface {
@@ -47,14 +48,10 @@ func main() {
 	store := core.NewStore().WithTransactionLogger(tl)
 	store.Start()
 
-	_ = frontend.NewRest(store).Start()
+	server := frontend.NewRest(store).Start()
 
-	for {
-
-	}
-
-	//ctx, _ := context.WithTimeout(context.Background(), 100000*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 100000*time.Second)
 	//do not change order, because the server needs open channels to complete all work
 	//then we can close transactionLogger
-	//handelShutdown(ctx, server, tl)
+	handelShutdown(ctx, server, tl)
 }

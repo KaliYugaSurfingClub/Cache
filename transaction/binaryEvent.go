@@ -46,6 +46,7 @@ func decodeString(r io.Reader, dest *[]byte) error {
 	return nil
 }
 
+// todo max len of wrote event is max value of int4
 func writeEventTo(w io.Writer, e core.Event) error {
 	tmp := "write %s of event was failed: %w"
 
@@ -67,8 +68,8 @@ func writeEventTo(w io.Writer, e core.Event) error {
 		return fmt.Errorf(tmp, "value", err)
 	}
 
-	if err := binary.Write(w, binary.LittleEndian, buff.Bytes()); err != nil {
-		return fmt.Errorf(tmp, "all fields", err)
+	if _, err := buff.WriteTo(w); err != nil {
+		return fmt.Errorf(tmp, "write", err)
 	}
 
 	return nil

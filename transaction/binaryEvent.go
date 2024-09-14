@@ -13,22 +13,22 @@ import (
 var ErrLongField = errors.New("field is too long")
 var ErrEmptyFile = errors.New("file is empty")
 
-func writeNum(w *bufio.Writer, n uint64) error {
+func writeNum(buf *bufio.Writer, n uint64) error {
 	binaryLen := make([]byte, 8)
 	binary.LittleEndian.PutUint64(binaryLen, n)
 
-	if _, err := w.Write(binaryLen[0 : slices.Index(binaryLen, 0)+1]); err != nil {
+	if _, err := buf.Write(binaryLen[0 : slices.Index(binaryLen, 0)+1]); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func readNum(r *bufio.Reader) (uint64, error) {
+func readNum(buf *bufio.Reader) (uint64, error) {
 	var n uint64
 
 	for i := 0; i < 8; i++ {
-		b, err := r.ReadByte()
+		b, err := buf.ReadByte()
 		if err != nil {
 			return 0, err
 		}
@@ -42,26 +42,30 @@ func readNum(r *bufio.Reader) (uint64, error) {
 	return n, nil
 }
 
-func writeString(w *bufio.Writer, str string) error {
-	if err := writeNum(w, uint64(len(str))); err != nil {
+func writeString(buf *bufio.Writer, str string) error {
+	if buf.Available() <= len(str) {
+		return ErrLongField
+	}
+
+	if err := writeNum(buf, uint64(len(str))); err != nil {
 		return err
 	}
 
-	if _, err := w.WriteString(str); err != nil {
+	if _, err := buf.WriteString(str); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func readString(r *bufio.Reader) (string, error) {
-	length, err := readNum(r)
+func readString(buf *bufio.Reader) (string, error) {
+	length, err := readNum(buf)
 	if err != nil {
 		return "", err
 	}
 
 	str := make([]byte, length)
-	if _, err := io.ReadFull(r, str); err != nil {
+	if _, err := io.ReadFull(buf, str); err != nil {
 		return "", err
 	}
 
@@ -87,9 +91,6 @@ func writeEventTo(w io.Writer, e core.Event) error {
 		return fmt.Errorf(tmp, "key", err)
 	}
 
-	if buf.Available() < len(e.Value) {
-		return ErrLongField
-	}
 	if err := writeString(buf, e.Value); err != nil {
 		return fmt.Errorf(tmp, "value", err)
 	}

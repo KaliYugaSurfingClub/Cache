@@ -10,7 +10,7 @@ import (
 
 var ErrorNoSuchKey = errors.New("no such key")
 
-type EventType byte
+type EventType = byte
 
 const (
 	EventDelete EventType = iota
@@ -21,12 +21,11 @@ type Event struct {
 	ID    uint64
 	Type  EventType
 	Key   string
-	Value []byte
+	Value string
 }
 
 type TransactionLogger interface {
-	WritePut(key string, value []byte)
-	WriteDelete(key string)
+	WriteEvent(t EventType, key string, value string)
 	ReadEvents() (<-chan Event, <-chan error)
 	Start() <-chan error
 	Shutdown(ctx context.Context) error
@@ -34,13 +33,13 @@ type TransactionLogger interface {
 
 type Store struct {
 	sync.RWMutex
-	data map[string][]byte
+	data map[string]string
 	tl   TransactionLogger
 }
 
 func NewStore(tl TransactionLogger) *Store {
 	return &Store{
-		data: make(map[string][]byte),
+		data: make(map[string]string),
 		tl:   tl,
 	}
 }
@@ -50,27 +49,24 @@ func (s *Store) WithTransactionLogger(tl TransactionLogger) *Store {
 	return s
 }
 
-func (s *Store) Get(key string) ([]byte, error) {
+func (s *Store) Get(key string) (string, error) {
 	s.RLock()
 	defer s.RUnlock()
 
 	value, ok := s.data[key]
 	if !ok {
-		return nil, ErrorNoSuchKey
+		return "", ErrorNoSuchKey
 	}
 
 	return value, nil
 }
 
-func (s *Store) Put(key string, value []byte) {
+func (s *Store) Put(key string, value string) {
 	s.Lock()
 	defer s.Unlock()
 
-	////todo debug
-	//fmt.Println("write", key)
-
 	s.data[key] = value
-	s.tl.WritePut(key, value)
+	s.tl.WriteEvent(EventPut, key, value)
 }
 
 func (s *Store) Delete(key string) {
@@ -78,16 +74,28 @@ func (s *Store) Delete(key string) {
 	defer s.Unlock()
 
 	delete(s.data, key)
-	s.tl.WriteDelete(key)
+	s.tl.WriteEvent(EventDelete, key, "")
 }
 
 func (s *Store) Start() {
+	//todo catch errors
+
 	events, readingErrs := s.tl.ReadEvents()
 
-	//todo maybe it is worth do not use goroutine for reading
 	go func() {
-		s.Lock()
-		defer s.Unlock()
+		if readingErrs == nil {
+			return
+		}
+
+		for err := range readingErrs {
+			log.Println(err)
+		}
+	}()
+
+	func() {
+		if events == nil {
+			return
+		}
 
 		for event := range events {
 			fmt.Println("read event", event)
@@ -100,17 +108,8 @@ func (s *Store) Start() {
 		}
 	}()
 
-	//todo if error is critical finish readEvents
-	//use context
-	go func() {
-		for err := range readingErrs {
-			log.Println(err)
-		}
-	}()
-
 	runtimeErrs := s.tl.Start()
 
-	//todo if err is critical shutdown (maybe)
 	go func() {
 		for err := range runtimeErrs {
 			log.Print(err)

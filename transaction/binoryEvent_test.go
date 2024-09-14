@@ -5,6 +5,7 @@ import (
 	"cache/core"
 	"errors"
 	"fmt"
+	"math"
 	"reflect"
 	"slices"
 	"strings"
@@ -23,7 +24,7 @@ var cases = []Case{
 			ID:    14,
 			Type:  core.EventPut,
 			Key:   "abc",
-			Value: []byte("cba"),
+			Value: "cba",
 		},
 	},
 	{
@@ -32,7 +33,7 @@ var cases = []Case{
 			ID:    14,
 			Type:  core.EventPut,
 			Key:   "abc asdasd sadsad",
-			Value: []byte("cba asdsad asdasd"),
+			Value: "cba asdsad asdasd",
 		},
 	},
 	{
@@ -41,7 +42,7 @@ var cases = []Case{
 			ID:    14,
 			Type:  core.EventPut,
 			Key:   "ASPOJSDA msapjodфыхв)(ЦЙУШО)шоыфывфтщ ыфвщтывфтфыъ-930032двй0-3939гцов-0392213ВЛТОВЫтштщNSOSDNu jsdnds==-2133221",
-			Value: []byte("ASPOIJ{SDAJВЫОЫВФльokDJJ*(0pl/\\	p9838j3838hnnosaISA09102312301mSuыфшвыфвыфзывыфтвфгышвфывы09=ёё1221ё"),
+			Value: "ASPOIJ{SDAJВЫОЫВФльokDJJ*(0pl/\\	p9838j3838hnnosaISA09102312301mSuыфшвыфвыфзывыфтвфгышвфывы09=ёё1221ё",
 		},
 	},
 	{
@@ -49,8 +50,8 @@ var cases = []Case{
 		event: core.Event{
 			ID:    14,
 			Type:  core.EventPut,
-			Key:   strings.Repeat("ASPOJSDA msapjodфыхв)(ЦЙУШО)шоыфывфтщ ыфвщтывфтфыъ-930032двй0-3939гцов-0392213ВЛТОВЫтштщNSOSDNu jsdnds==-2133221", 10),
-			Value: []byte(strings.Repeat("ASPOJSDA msapjodфыхв)(ЦЙУШО)шоыфывфтщ ыфвщтывфтфыъ-930032двй0-3939гцов-0392213ВЛТОВЫтштщNSOSDNu jsdnds==-2133221", 10)),
+			Key:   strings.Repeat("a", math.MaxInt32/300),
+			Value: strings.Repeat("b", math.MaxInt32/300),
 		},
 	},
 	{
@@ -59,7 +60,7 @@ var cases = []Case{
 			ID:    14,
 			Type:  core.EventPut,
 			Key:   "",
-			Value: []byte("avc"),
+			Value: "avc",
 		},
 	},
 	{
@@ -68,7 +69,7 @@ var cases = []Case{
 			ID:    14,
 			Type:  core.EventPut,
 			Key:   "avc",
-			Value: nil,
+			Value: "",
 		},
 	},
 	{
@@ -77,7 +78,7 @@ var cases = []Case{
 			ID:    14,
 			Type:  core.EventPut,
 			Key:   "avc",
-			Value: nil,
+			Value: "",
 		},
 	},
 }
@@ -91,7 +92,7 @@ func init() {
 				ID:    c.event.ID,
 				Type:  core.EventDelete,
 				Key:   c.event.Key,
-				Value: nil,
+				Value: "",
 			},
 		}
 
@@ -106,9 +107,19 @@ func writeAndRead(t *testing.T, c Case) {
 	mockFileAfterWriting := mockFile.Bytes()
 	event, readErr := readEvent(mockFile)
 
+	if len(mockFileAfterWriting) > 50 {
+		mockFileAfterWriting = slices.Concat(
+			mockFileAfterWriting[0:50],
+			mockFileAfterWriting[len(mockFileAfterWriting)-50:],
+		)
+	}
+
+	//todo нечитаемо если key/value очень большие
 	info := fmt.Sprintf(
-		"\ncase: %s\noriginal event: %v\nmock file after writing%v\nwriting error %s\ngot event: %v\n reading error %s",
-		c.name, c.event, mockFileAfterWriting, writeErr, event, readErr,
+		"\ncase: %s\noriginal event: %v\nmock file after writing%v\nwriting error %s\ngot event: %v\nreading error: %s",
+		c.name, c.event,
+		mockFileAfterWriting,
+		writeErr, event, readErr,
 	)
 
 	if writeErr != nil && !errors.Is(writeErr, ErrLongField) {
@@ -136,7 +147,7 @@ func FuzzWriteReadRestore(f *testing.F) {
 		f.Add(test.name, test.event.ID, byte(test.event.Type), test.event.Key, test.event.Value)
 	}
 
-	f.Fuzz(func(t *testing.T, name string, ID uint64, eventType byte, key string, value []byte) {
+	f.Fuzz(func(t *testing.T, name string, ID uint64, eventType byte, key string, value string) {
 		testCase := Case{
 			name:  name,
 			event: core.Event{ID: ID, Type: core.EventType(eventType), Key: key, Value: value},

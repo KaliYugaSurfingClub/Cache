@@ -1,106 +1,125 @@
 package transaction
 
 import (
-	"bytes"
+	"bufio"
 	"cache/core"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 )
 
 var ErrLongField = errors.New("field is too long")
 var ErrEmptyFile = errors.New("file is empty")
 
-func encodeString(w io.Writer, bytes []byte) error {
-	//todo remove literal move this limit to frontend
-	if len(bytes) > 255 {
-		return ErrLongField
-	}
+func writeNum(w *bufio.Writer, n uint64) error {
+	binaryLen := make([]byte, 8)
+	binary.LittleEndian.PutUint64(binaryLen, n)
 
-	if err := binary.Write(w, binary.LittleEndian, uint8(len(bytes))); err != nil {
-		return err
-	}
-
-	if _, err := w.Write(bytes); err != nil {
+	if _, err := w.Write(binaryLen[0 : slices.Index(binaryLen, 0)+1]); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func decodeString(r io.Reader, dest *[]byte) error {
-	var length uint8
-	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
+func readNum(r *bufio.Reader) (uint64, error) {
+	var n uint64
+
+	for i := 0; i < 8; i++ {
+		b, err := r.ReadByte()
+		if err != nil {
+			return 0, err
+		}
+		if b == 0 {
+			break
+		}
+
+		n += uint64(b)
+	}
+
+	return n, nil
+}
+
+func writeString(w *bufio.Writer, str string) error {
+	if err := writeNum(w, uint64(len(str))); err != nil {
 		return err
 	}
 
-	if length == 0 {
-		return nil
-	}
-
-	*dest = make([]byte, length)
-	if err := binary.Read(r, binary.LittleEndian, *dest); err != nil {
+	if _, err := w.WriteString(str); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// todo max len of wrote event is max value of int4
+func readString(r *bufio.Reader) (string, error) {
+	length, err := readNum(r)
+	if err != nil {
+		return "", err
+	}
+
+	str := make([]byte, length)
+	if _, err := io.ReadFull(r, str); err != nil {
+		return "", err
+	}
+
+	return string(str), nil
+}
+
 func writeEventTo(w io.Writer, e core.Event) error {
 	tmp := "write %s of event was failed: %w"
+	buf := bufio.NewWriter(w)
 
-	buff := bytes.NewBuffer([]byte{})
-
-	if err := binary.Write(buff, binary.LittleEndian, e.ID); err != nil {
+	if err := writeNum(buf, e.ID); err != nil {
 		return fmt.Errorf(tmp, "ID", err)
 	}
 
-	if err := binary.Write(buff, binary.LittleEndian, e.Type); err != nil {
+	if err := buf.WriteByte(e.Type); err != nil {
 		return fmt.Errorf(tmp, "type", err)
 	}
 
-	if err := encodeString(buff, []byte(e.Key)); err != nil {
+	if buf.Available() < len(e.Key) {
+		return ErrLongField
+	}
+	if err := writeString(buf, e.Key); err != nil {
 		return fmt.Errorf(tmp, "key", err)
 	}
 
-	if err := encodeString(buff, e.Value); err != nil {
+	if buf.Available() < len(e.Value) {
+		return ErrLongField
+	}
+	if err := writeString(buf, e.Value); err != nil {
 		return fmt.Errorf(tmp, "value", err)
 	}
 
-	if _, err := buff.WriteTo(w); err != nil {
-		return fmt.Errorf(tmp, "write", err)
-	}
-
-	return nil
+	//todo fix that if buffer is overflow buf.Flush() will be called auto
+	//Available позволяет не писать в буфер лишнего и предотвратить флаш (вроде)
+	return buf.Flush()
 }
 
-func readEvent(r io.Reader) (core.Event, error) {
+func readEvent(r io.Reader) (e core.Event, err error) {
 	tmp := "read %s of event was failed: %w"
+	buf := bufio.NewReader(r)
 
-	e := core.Event{}
+	if _, err = buf.Peek(1); err != nil {
+		return e, ErrEmptyFile
+	}
 
-	if err := binary.Read(r, binary.LittleEndian, &e.ID); err != nil {
-		if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-			return e, ErrEmptyFile
-		}
-
+	if e.ID, err = readNum(buf); err != nil {
 		return e, fmt.Errorf(tmp, "id", err)
 	}
 
-	if err := binary.Read(r, binary.LittleEndian, &e.Type); err != nil {
+	if e.Type, err = buf.ReadByte(); err != nil {
 		return e, fmt.Errorf(tmp, "type", err)
 	}
 
-	var keyBuff []byte
-	if err := decodeString(r, &keyBuff); err != nil {
+	if e.Key, err = readString(buf); err != nil {
 		return e, fmt.Errorf(tmp, "key", err)
 	}
 
-	e.Key = string(keyBuff)
-
-	if err := decodeString(r, &e.Value); err != nil {
+	if e.Value, err = readString(buf); err != nil {
 		return e, fmt.Errorf(tmp, "value", err)
 	}
 

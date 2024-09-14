@@ -34,9 +34,6 @@ func handelShutdown(timeout time.Duration, services ...ShutdownAble) {
 	}
 }
 
-//todo check len of key and value in handlers or in core
-//pass max len of key value thanks for config and do not use uint8 fo len
-
 func main() {
 	cfg := config.Get()
 	tl, err := transaction.NewLogger(cfg.LogsPath)

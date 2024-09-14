@@ -10,20 +10,12 @@ import (
 )
 
 type FileLogger struct {
-	wg *sync.WaitGroup
-
-	events    chan<- core.Event
-	file      *os.File
-	currentID uint64
+	wg         *sync.WaitGroup
+	events     chan<- core.Event
+	file       *os.File
+	currentID  uint64
+	inShutdown bool
 }
-
-type BackgroundLogger struct{}
-
-func (tl *BackgroundLogger) WritePut(key string, value []byte)             {}
-func (tl *BackgroundLogger) WriteDelete(key string)                        {}
-func (tl *BackgroundLogger) ReadEvents() (<-chan core.Event, <-chan error) { return nil, nil }
-func (tl *BackgroundLogger) Start() <-chan error                           { return nil }
-func (tl *BackgroundLogger) Shutdown(ctx context.Context) error            { return nil }
 
 func NewLogger(filename string) (core.TransactionLogger, error) {
 	if filename == "" {
@@ -38,15 +30,13 @@ func NewLogger(filename string) (core.TransactionLogger, error) {
 	return &FileLogger{file: file, wg: &sync.WaitGroup{}}, nil
 }
 
-// todo what will happens if i will write at the shutdown time
-func (tl *FileLogger) WritePut(key string, value []byte) {
-	tl.wg.Add(1)
-	tl.events <- core.Event{Type: core.EventPut, Key: key, Value: value}
-}
+func (tl *FileLogger) WriteEvent(t core.EventType, key string, value string) {
+	if tl.inShutdown {
+		return
+	}
 
-func (tl *FileLogger) WriteDelete(key string) {
 	tl.wg.Add(1)
-	tl.events <- core.Event{Type: core.EventDelete, Key: key}
+	tl.events <- core.Event{Type: t, Key: key, Value: value}
 }
 
 func (tl *FileLogger) Wait() {
@@ -65,14 +55,10 @@ func (tl *FileLogger) ReadEvents() (<-chan core.Event, <-chan error) {
 
 		for {
 			event, err := readEvent(tl.file)
-			////todo debug
-			//time.Sleep(1 * time.Minute)
 
 			if errors.Is(err, ErrEmptyFile) {
 				return
 			}
-
-			fmt.Println(event)
 
 			if err != nil {
 				outError <- err
@@ -118,6 +104,8 @@ func (tl *FileLogger) Start() <-chan error {
 }
 
 func (tl *FileLogger) Shutdown(ctx context.Context) error {
+	tl.inShutdown = true
+
 	errs := make(chan error)
 
 	go func() {

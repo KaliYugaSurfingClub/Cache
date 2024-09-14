@@ -7,7 +7,6 @@ import (
 	"github.com/gorilla/mux"
 	"io"
 	"net/http"
-	"time"
 )
 
 type Rest struct {
@@ -18,9 +17,9 @@ func NewRest(store *core.Store, port string) *http.Server {
 	router := mux.NewRouter()
 	f := &Rest{store}
 
-	router.HandleFunc("/v1/{key}", f.KeyValuePutHandler).Methods(http.MethodPut)
-	router.HandleFunc("/v1/{key}", f.KeyValueGetHandler).Methods(http.MethodGet)
-	router.HandleFunc("/v1/{key}", f.KeyValueDeleteHandler).Methods(http.MethodDelete)
+	router.HandleFunc("/v1/{key}", f.Put).Methods(http.MethodPut)
+	router.HandleFunc("/v1/{key}", f.Get).Methods(http.MethodGet)
+	router.HandleFunc("/v1/{key}", f.Delete).Methods(http.MethodDelete)
 
 	s := http.Server{
 		Addr:    ":" + port,
@@ -30,7 +29,7 @@ func NewRest(store *core.Store, port string) *http.Server {
 	return &s
 }
 
-func (f *Rest) KeyValueGetHandler(w http.ResponseWriter, r *http.Request) {
+func (f *Rest) Get(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
 
 	value, err := f.store.Get(key)
@@ -45,14 +44,14 @@ func (f *Rest) KeyValueGetHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 		return
 	}
-	if _, err = w.Write(value); err != nil {
+	if _, err = w.Write([]byte(value)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		fmt.Println(err)
 		return
 	}
 }
 
-func (f *Rest) KeyValuePutHandler(w http.ResponseWriter, r *http.Request) {
+func (f *Rest) Put(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
 
 	value, err := io.ReadAll(r.Body)
@@ -64,14 +63,11 @@ func (f *Rest) KeyValuePutHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//todo debug
-	time.Sleep(10 * time.Second)
-
-	f.store.Put(key, value)
+	f.store.Put(key, string(value))
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (f *Rest) KeyValueDeleteHandler(w http.ResponseWriter, r *http.Request) {
+func (f *Rest) Delete(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
 	f.store.Delete(key)
 }

@@ -84,9 +84,6 @@ func writeEventTo(w io.Writer, e core.Event) error {
 		return fmt.Errorf(tmp, "type", err)
 	}
 
-	if buf.Available() < len(e.Key) {
-		return ErrLongField
-	}
 	if err := writeString(buf, e.Key); err != nil {
 		return fmt.Errorf(tmp, "key", err)
 	}
@@ -95,8 +92,6 @@ func writeEventTo(w io.Writer, e core.Event) error {
 		return fmt.Errorf(tmp, "value", err)
 	}
 
-	//todo fix that if buffer is overflow buf.Flush() will be called auto
-	//Available позволяет не писать в буфер лишнего и предотвратить флаш (вроде)
 	return buf.Flush()
 }
 

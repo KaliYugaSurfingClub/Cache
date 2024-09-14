@@ -95,8 +95,6 @@ func writeEventTo(w io.Writer, e core.Event) error {
 		return fmt.Errorf(tmp, "value", err)
 	}
 
-	//todo fix that if buffer is overflow buf.Flush() will be called auto
-	//Available позволяет не писать в буфер лишнего и предотвратить флаш (вроде)
 	return buf.Flush()
 }
 

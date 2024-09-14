@@ -19,7 +19,7 @@ type FileLogger struct {
 
 func NewLogger(filename string) (core.TransactionLogger, error) {
 	if filename == "" {
-		return &BackgroundLogger{}, nil
+		return &ZeroLogger{}, nil
 	}
 
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0755)

@@ -5,9 +5,9 @@ import (
 	"context"
 )
 
-type BackgroundLogger struct{}
+type ZeroLogger struct{}
 
-func (tl *BackgroundLogger) WriteEvent(t core.EventType, key string, value string) {}
-func (tl *BackgroundLogger) ReadEvents() (<-chan core.Event, <-chan error)         { return nil, nil }
-func (tl *BackgroundLogger) Start() <-chan error                                   { return nil }
-func (tl *BackgroundLogger) Shutdown(ctx context.Context) error                    { return nil }
+func (tl *ZeroLogger) WriteEvent(core.EventType, string, string)     {}
+func (tl *ZeroLogger) ReadEvents() (<-chan core.Event, <-chan error) { return nil, nil }
+func (tl *ZeroLogger) Start() <-chan error                           { return nil }
+func (tl *ZeroLogger) Shutdown(context.Context) error                { return nil }

@@ -100,26 +100,46 @@ func init() {
 	}
 }
 
+func summarizeString(str string, limit int) string {
+	return summarizeSlice([]rune(str), limit)
+}
+
+func summarizeSlice[T any](slice []T, limit int) string {
+	if len(slice) > limit {
+		return fmt.Sprintf("%v", slice[0:limit/2]) + "..." + fmt.Sprintf("%v", slice[len(slice)-limit/2:])
+	}
+
+	return fmt.Sprintf("%v", slice)
+}
+
 func writeAndRead(t *testing.T, c Case) {
 	mockFile := bytes.NewBuffer(nil)
 	writeErr := writeEventTo(mockFile, c.event)
 
 	mockFileAfterWriting := mockFile.Bytes()
-	event, readErr := readEvent(mockFile)
+	gotEvent, readErr := readEvent(mockFile)
 
-	if len(mockFileAfterWriting) > 50 {
-		mockFileAfterWriting = slices.Concat(
-			mockFileAfterWriting[0:50],
-			mockFileAfterWriting[len(mockFileAfterWriting)-50:],
-		)
+	mockFileAfterWritingForPrint := summarizeSlice(mockFileAfterWriting, 20)
+
+	expectedEventForPrint := core.Event{
+		ID:    c.event.ID,
+		Type:  c.event.Type,
+		Key:   summarizeString(c.event.Key, 20),
+		Value: summarizeString(c.event.Value, 20),
 	}
 
-	//todo нечитаемо если key/value очень большие
+	gotEventForPrint := core.Event{
+		ID:    gotEvent.ID,
+		Type:  gotEvent.Type,
+		Key:   summarizeString(gotEvent.Key, 20),
+		Value: summarizeString(gotEvent.Value, 20),
+	}
+
 	info := fmt.Sprintf(
-		"\ncase: %s\noriginal event: %v\nmock file after writing%v\nwriting error %s\ngot event: %v\nreading error: %s",
-		c.name, c.event,
-		mockFileAfterWriting,
-		writeErr, event, readErr,
+		"\ncase: %s\nexpected event: %v\nmock file after writing%s\nwriting error %s\ngot event: %v\nreading error: %s",
+		c.name, expectedEventForPrint,
+		mockFileAfterWritingForPrint,
+		writeErr, gotEventForPrint, readErr,
 	)
 
 	if writeErr != nil && !errors.Is(writeErr, ErrLongField) {
@@ -136,21 +156,21 @@ func writeAndRead(t *testing.T, c Case) {
 		t.Errorf("unempty file buffer after writing error" + info)
 	}
 
-	//if we write no error, wrote event and read event should be equal
-	if writeErr == nil && !reflect.DeepEqual(c.event, event) {
-		t.Errorf("expected event and got event are different" + info)
+	//if we write no error, wrote gotEvent and read gotEvent should be equal
+	if writeErr == nil && !reflect.DeepEqual(c.event, gotEvent) {
+		t.Errorf("expected gotEvent and got gotEvent are different" + info)
 	}
 }
 
 func FuzzWriteReadRestore(f *testing.F) {
 	for _, test := range cases {
-		f.Add(test.name, test.event.ID, byte(test.event.Type), test.event.Key, test.event.Value)
+		f.Add(test.name, test.event.ID, test.event.Type, test.event.Key, test.event.Value)
 	}
 
 	f.Fuzz(func(t *testing.T, name string, ID uint64, eventType byte, key string, value string) {
 		testCase := Case{
 			name:  name,
-			event: core.Event{ID: ID, Type: core.EventType(eventType), Key: key, Value: value},
+			event: core.Event{ID: ID, Type: eventType, Key: key, Value: value},
 		}
 
 		writeAndRead(t, testCase)

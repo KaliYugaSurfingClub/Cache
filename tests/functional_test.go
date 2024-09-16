@@ -2,28 +2,47 @@ package main
 
 import (
 	"cache/core"
+	"context"
+	"errors"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
-	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
+	"syscall"
 	"testing"
-	"time"
 )
 
-const port = "http://127.0.0.1:8080"
+const port = "14889"
+const root = "http://127.0.0.1:" + port
 
-var cmd *exec.Cmd
+var client = &http.Client{}
 
 func init() {
-	//todo
-	cmd = exec.Command("go", "run", "../main.go")
-
-	if err := cmd.Start(); err != nil {
-		os.Exit(1)
+	//compile app file
+	if err := exec.Command("go", "build", "../main.go").Run(); err != nil {
+		log.Fatal(err)
 	}
 
-	time.Sleep(3 * time.Second)
+	//run app
+	cmd := exec.Command("./main.exe", "-port="+port)
+	if err := cmd.Run(); err != nil {
+		log.Fatal(err)
+	}
+
+	//notify app when test script terminated
+	go func() {
+		ctx, _ := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+		<-ctx.Done()
+		fmt.Println("shutting down tests")
+
+		if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
+			log.Fatal(err)
+		}
+	}()
 }
 
 type request struct {
@@ -43,7 +62,7 @@ func TestPutGet(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp != req.value {
-		t.Fatal(resp)
+		t.Error(resp)
 	}
 }
 
@@ -53,7 +72,7 @@ func TestNoSuchKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp != core.ErrorNoSuchKey.Error()+"\n" {
-		t.Fatal(resp)
+		t.Error(resp)
 	}
 }
 
@@ -73,22 +92,12 @@ func TestDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 	if resp != core.ErrorNoSuchKey.Error()+"\n" {
-		t.Fatal(resp)
+		t.Error(resp)
 	}
-}
-
-func putRequest(key, value string) error {
-	url := port + "/v1/" + key
-
-	if _, err := http.NewRequest("PUT", url, strings.NewReader(value)); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func getRequest(key string) (string, error) {
-	url := port + "/v1/" + key
+	url := root + "/v1/" + key
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -105,12 +114,41 @@ func getRequest(key string) (string, error) {
 	return string(value), nil
 }
 
-func deleteRequest(key string) error {
-	url := port + "/v1/" + key
+func putRequest(key, value string) error {
+	url := root + "/v1/" + key
 
-	if _, err := http.Get(url); err != nil {
+	req, err := http.NewRequest("PUT", url, strings.NewReader(value))
+	if err != nil {
 		return err
 	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusCreated {
+		return errors.New("not created")
+	}
+
+	defer resp.Body.Close()
+
+	return nil
+}
+
+func deleteRequest(key string) error {
+	url := root + "/v1/" + key
+
+	req, err := http.NewRequest("DELETE", url, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
 
 	return nil
 }

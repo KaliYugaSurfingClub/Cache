@@ -2,24 +2,31 @@ package transaction
 
 import (
 	"cache/core"
+	"cache/transaction/binaryEvent"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"sync"
 )
 
 type FileLogger struct {
 	wg         *sync.WaitGroup
+	file       io.ReadWriteCloser
 	events     chan<- core.Event
-	file       *os.File
+	bandwidth  int
 	currentID  uint64
 	inShutdown bool
 }
 
-func NewLogger(filename string) (core.TransactionLogger, error) {
+func NewLogger(filename string, bandwidth int) (core.TransactionLogger, error) {
 	if filename == "" {
 		return &ZeroLogger{}, nil
+	}
+
+	if bandwidth < 1 {
+		return nil, errors.New("bandwidth must be at least 1")
 	}
 
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0755)
@@ -27,7 +34,7 @@ func NewLogger(filename string) (core.TransactionLogger, error) {
 		return nil, err
 	}
 
-	return &FileLogger{file: file, wg: &sync.WaitGroup{}}, nil
+	return &FileLogger{file: file, wg: &sync.WaitGroup{}, bandwidth: bandwidth}, nil
 }
 
 func (tl *FileLogger) WriteEvent(t core.EventType, key string, value string) {
@@ -54,21 +61,16 @@ func (tl *FileLogger) ReadEvents() (<-chan core.Event, <-chan error) {
 		defer close(outEvent)
 
 		for {
-			event, err := readEvent(tl.file)
+			event, err := binaryEvent.Read(tl.file)
 
-			if errors.Is(err, ErrEmptyFile) {
+			if errors.Is(err, binaryEvent.ErrEmptyFile) {
+				return
+			}
+			if err != nil {
+				outError <- err
 				return
 			}
 
-			if err != nil {
-				outError <- err
-			}
-
-			if tl.currentID > event.ID {
-				outError <- fmt.Errorf("transaction numbers out of sequence")
-			}
-
-			tl.currentID = event.ID
 			outEvent <- event
 		}
 	}()
@@ -78,8 +80,7 @@ func (tl *FileLogger) ReadEvents() (<-chan core.Event, <-chan error) {
 
 func (tl *FileLogger) Start() <-chan error {
 	//buffer 16 means that 16 handlers can send event and do not wait when logger write event to file
-	//todo remove literal
-	events := make(chan core.Event, 16)
+	events := make(chan core.Event, tl.bandwidth)
 	errs := make(chan error)
 
 	tl.events = events
@@ -92,7 +93,7 @@ func (tl *FileLogger) Start() <-chan error {
 			e.ID = tl.currentID
 			tl.currentID++
 
-			if err := writeEventTo(tl.file, e); err != nil {
+			if err := binaryEvent.WriteTo(tl.file, e); err != nil {
 				errs <- err
 			}
 

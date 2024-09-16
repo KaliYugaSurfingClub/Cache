@@ -4,25 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"sync"
 )
 
 var ErrorNoSuchKey = errors.New("no such key")
-
-type EventType = byte
-
-const (
-	EventDelete EventType = iota
-	EventPut
-)
-
-type Event struct {
-	ID    uint64
-	Type  EventType
-	Key   string
-	Value string
-}
 
 type TransactionLogger interface {
 	WriteEvent(t EventType, key string, value string)
@@ -77,28 +62,19 @@ func (s *Store) Delete(key string) {
 	s.tl.WriteEvent(EventDelete, key, "")
 }
 
-func (s *Store) Start() {
-	//todo catch errors
+func (s *Store) Restore() error {
+	var err error
 
-	events, readingErrs := s.tl.ReadEvents()
+	s.Lock()
+	defer s.Unlock()
 
-	go func() {
-		if readingErrs == nil {
-			return
-		}
+	events, errs := s.tl.ReadEvents()
+	ok, event := true, Event{}
 
-		for err := range readingErrs {
-			log.Println(err)
-		}
-	}()
-
-	func() {
-		if events == nil {
-			return
-		}
-
-		for event := range events {
-			fmt.Println("read event", event)
+	for ok && err == nil {
+		select {
+		case err, ok = <-errs:
+		case event, ok = <-events:
 			switch event.Type {
 			case EventPut:
 				s.data[event.Key] = event.Value
@@ -106,13 +82,9 @@ func (s *Store) Start() {
 				delete(s.data, event.Key)
 			}
 		}
-	}()
+	}
 
-	runtimeErrs := s.tl.Start()
+	fmt.Println("store", s.data)
 
-	go func() {
-		for err := range runtimeErrs {
-			log.Print(err)
-		}
-	}()
+	return err
 }

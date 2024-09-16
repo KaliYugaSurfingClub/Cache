@@ -1,4 +1,4 @@
-package transaction
+package binaryEvent
 
 import (
 	"bufio"
@@ -72,7 +72,7 @@ func readString(buf *bufio.Reader) (string, error) {
 	return string(str), nil
 }
 
-func writeEventTo(w io.Writer, e core.Event) error {
+func WriteTo(w io.Writer, e core.Event) error {
 	tmp := "write %s of event was failed: %w"
 	buf := bufio.NewWriter(w)
 
@@ -95,7 +95,7 @@ func writeEventTo(w io.Writer, e core.Event) error {
 	return buf.Flush()
 }
 
-func readEvent(r io.Reader) (e core.Event, err error) {
+func Read(r io.Reader) (e core.Event, err error) {
 	tmp := "read %s of event was failed: %w"
 	buf := bufio.NewReader(r)
 

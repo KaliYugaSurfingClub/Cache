@@ -10,15 +10,16 @@ import (
 	"fmt"
 	"net/http"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 )
 
-type ShutdownAble interface {
+type shutdownAble interface {
 	Shutdown(ctx context.Context) error
 }
 
-func handelShutdown(timeout time.Duration, services ...ShutdownAble) {
+func HandelShutdown(timeout time.Duration, services ...shutdownAble) {
 	ctx, _ := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	<-ctx.Done()
@@ -36,20 +37,24 @@ func handelShutdown(timeout time.Duration, services ...ShutdownAble) {
 
 func main() {
 	cfg := config.Get()
-	tl, err := transaction.NewLogger(cfg.LogsPath)
+
+	tl, err := transaction.NewLogger(cfg.LogsPath, runtime.NumCPU())
 	if err != nil {
 		panic(err)
 	}
 
+	tl.Start()
+
 	store := core.NewStore(tl)
-	store.Start()
+	if err = store.Restore(); err != nil {
+		panic(err)
+	}
 
 	server := frontend.NewRest(store, cfg.Port)
-	go func() {
-		if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) && err != nil {
-			panic(err)
-		}
-	}()
 
-	handelShutdown(cfg.TimeToShutdown, server, tl)
+	go HandelShutdown(cfg.TimeToShutdown, server, tl)
+
+	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) && err != nil {
+		panic(err)
+	}
 }

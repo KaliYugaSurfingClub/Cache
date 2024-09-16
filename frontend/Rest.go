@@ -9,6 +9,8 @@ import (
 	"net/http"
 )
 
+//todo var like "first key" in URL do not work correctly
+
 type Rest struct {
 	store *core.Store
 }
@@ -44,6 +46,7 @@ func (f *Rest) Get(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 		return
 	}
+
 	if _, err = w.Write([]byte(value)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		fmt.Println(err)

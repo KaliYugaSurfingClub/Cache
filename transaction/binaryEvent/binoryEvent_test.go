@@ -1,4 +1,4 @@
-package transaction
+package binaryEvent
 
 import (
 	"bytes"
@@ -114,10 +114,10 @@ func summarizeSlice[T any](slice []T, limit int) string {
 
 func writeAndRead(t *testing.T, c Case) {
 	mockFile := bytes.NewBuffer(nil)
-	writeErr := writeEventTo(mockFile, c.event)
+	writeErr := WriteTo(mockFile, c.event)
 
 	mockFileAfterWriting := mockFile.Bytes()
-	gotEvent, readErr := readEvent(mockFile)
+	gotEvent, readErr := Read(mockFile)
 
 	mockFileAfterWritingForPrint := summarizeSlice(mockFileAfterWriting, 20)
 

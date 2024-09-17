@@ -14,6 +14,7 @@ type Config struct {
 }
 
 func Get() Config {
+	//todo write usage and docs
 	port := flag.String("port", "8080", "")
 	logsPath := flag.String("logs_path", "logs.bin", "")
 	timeToShutdown := flag.Duration("time_to_shutdown", 5*time.Minute, "")

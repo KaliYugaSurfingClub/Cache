@@ -13,7 +13,8 @@ type request struct {
 }
 
 func TestBasicCases(t *testing.T) {
-	a := tests.NewApp("../../main.go").WithPort("5678")
+	a := tests.NewApp("../../main.go").WithPort("9989")
+
 	a.Start()
 	defer a.Stop()
 

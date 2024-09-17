@@ -9,8 +9,6 @@ import (
 	"net/http"
 )
 
-//todo var like "first key" in URL do not work correctly
-
 type Rest struct {
 	store *core.Store
 }

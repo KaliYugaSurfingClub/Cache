@@ -2,25 +2,23 @@ package main
 
 import (
 	"cache/core"
-	"context"
 	"errors"
-	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
-	"os/signal"
 	"strings"
-	"syscall"
 	"testing"
+	"time"
 )
 
-const port = "14889"
+const port = "5678"
 const root = "http://127.0.0.1:" + port
 
 var client = &http.Client{}
 
-func init() {
+func TestMain(m *testing.M) {
 	//compile app file
 	if err := exec.Command("go", "build", "../main.go").Run(); err != nil {
 		log.Fatal(err)
@@ -28,21 +26,24 @@ func init() {
 
 	//run app
 	cmd := exec.Command("./main.exe", "-port="+port)
-	if err := cmd.Run(); err != nil {
+	if err := cmd.Start(); err != nil {
 		log.Fatal(err)
 	}
 
-	//notify app when test script terminated
-	go func() {
-		ctx, _ := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	//todo refactor
+	//time to run server
+	time.Sleep(2 * time.Second)
 
-		<-ctx.Done()
-		fmt.Println("shutting down tests")
+	exitCode := m.Run()
 
-		if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
-			log.Fatal(err)
-		}
-	}()
+	if err := cmd.Process.Kill(); err != nil {
+		log.Fatal(err)
+	}
+	if err := cmd.Wait(); err != nil {
+		log.Fatal(err)
+	}
+
+	os.Exit(exitCode)
 }
 
 type request struct {
@@ -51,7 +52,7 @@ type request struct {
 }
 
 func TestPutGet(t *testing.T) {
-	req := request{"first", "some value"}
+	req := request{"first key", "some value"}
 
 	if err := putRequest(req.key, req.value); err != nil {
 		t.Fatal(err)
@@ -77,7 +78,7 @@ func TestNoSuchKey(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	req := request{"first", "some value"}
+	req := request{"first key", "some value"}
 
 	if err := putRequest(req.key, req.value); err != nil {
 		t.Fatal(err)

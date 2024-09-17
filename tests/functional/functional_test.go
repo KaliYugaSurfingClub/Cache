@@ -12,8 +12,11 @@ type request struct {
 	value string
 }
 
+//todo test restoring after term
+
 func TestBasicCases(t *testing.T) {
-	a := tests.NewApp("../../main.go").WithPort("5678")
+	a := tests.NewApp("../../main.go").WithPort("9989")
+
 	a.Start()
 	defer a.Stop()
 
@@ -33,7 +36,7 @@ func TestBasicCases(t *testing.T) {
 	})
 
 	t.Run("get", func(t *testing.T) {
-		if err := a.GetRequest(req1.key, req1.value); err != nil {
+		if err := a.CheckGetRequest(req1.key, req1.value); err != nil {
 			t.Fatal(err)
 		}
 	})

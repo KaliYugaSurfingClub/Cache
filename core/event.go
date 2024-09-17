@@ -5,6 +5,7 @@ type EventType = byte
 const (
 	EventDelete EventType = iota
 	EventPut
+	EventClear
 )
 
 type Event struct {

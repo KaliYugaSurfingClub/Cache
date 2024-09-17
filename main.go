@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"net/http"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
 )
@@ -38,7 +37,7 @@ func HandelShutdown(timeout time.Duration, services ...shutdownAble) {
 func main() {
 	cfg := config.Get()
 
-	tl, err := transaction.NewLogger(cfg.LogsPath, runtime.NumCPU())
+	tl, err := transaction.NewLogger(cfg.LogsPath, cfg.Bandwidth)
 	if err != nil {
 		panic(err)
 	}

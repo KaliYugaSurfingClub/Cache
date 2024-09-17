@@ -62,6 +62,14 @@ func (s *Store) Delete(key string) {
 	s.tl.WriteEvent(EventDelete, key, "")
 }
 
+func (s *Store) Clear() {
+	s.Lock()
+	defer s.Unlock()
+
+	clear(s.data)
+	s.tl.WriteEvent(EventClear, "", "")
+}
+
 func (s *Store) Restore() error {
 	var err error
 
@@ -80,6 +88,8 @@ func (s *Store) Restore() error {
 				s.data[event.Key] = event.Value
 			case EventDelete:
 				delete(s.data, event.Key)
+			case EventClear:
+				clear(s.data)
 			}
 		}
 	}

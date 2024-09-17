@@ -20,6 +20,7 @@ func NewRest(store *core.Store, port string) *http.Server {
 	router.HandleFunc("/v1/{key}", f.Put).Methods(http.MethodPut)
 	router.HandleFunc("/v1/{key}", f.Get).Methods(http.MethodGet)
 	router.HandleFunc("/v1/{key}", f.Delete).Methods(http.MethodDelete)
+	router.HandleFunc("/v1/operation/clear", f.Clear).Methods(http.MethodDelete)
 
 	s := http.Server{
 		Addr:    ":" + port,
@@ -71,4 +72,8 @@ func (f *Rest) Put(w http.ResponseWriter, r *http.Request) {
 func (f *Rest) Delete(w http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
 	f.store.Delete(key)
+}
+
+func (f *Rest) Clear(w http.ResponseWriter, r *http.Request) {
+	f.store.Clear()
 }

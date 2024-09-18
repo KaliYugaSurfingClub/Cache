@@ -1,7 +1,5 @@
 # NoSQL stateful database
 
-# Key features
-
 # Install
 ```cmd
 git clone https://github.com/KaliYugaSurfingClub/Cache.git Stateful/sources

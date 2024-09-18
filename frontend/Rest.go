@@ -41,7 +41,7 @@ func (f *Rest) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Println(err)
 		return
 	}
@@ -60,7 +60,7 @@ func (f *Rest) Put(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Println(err)
 		return
 	}
@@ -69,11 +69,11 @@ func (f *Rest) Put(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
-func (f *Rest) Delete(w http.ResponseWriter, r *http.Request) {
+func (f *Rest) Delete(_ http.ResponseWriter, r *http.Request) {
 	key := mux.Vars(r)["key"]
 	f.store.Delete(key)
 }
 
-func (f *Rest) Clear(w http.ResponseWriter, r *http.Request) {
+func (f *Rest) Clear(_ http.ResponseWriter, r *http.Request) {
 	f.store.Clear()
 }

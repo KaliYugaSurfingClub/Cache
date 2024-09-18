@@ -25,7 +25,8 @@ const defaultPort = "8080"
 func NewApp(location string) *TestingApp {
 	return &TestingApp{
 		location: location,
-		root:     localhost + ":" + defaultPort,
+		root:     localhost + ":" + "8080",
+		client:   &http.Client{},
 	}
 }
 

@@ -51,7 +51,7 @@ func main() {
 
 	server := frontend.NewRest(store, cfg.Port)
 
-	go HandelShutdown(cfg.TimeToShutdown, server, tl)
+	go HandelShutdown(cfg.TimeForShutdown, server, tl)
 
 	if err := server.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) && err != nil {
 		panic(err)

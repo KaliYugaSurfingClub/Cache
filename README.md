@@ -11,7 +11,7 @@ go build -o ../stateful.exe main.go
 
 # The use
 ```cmd
-stateful.exe -port=YOUR_PORT -logs_path=YOUR_FILE_FOR_STATE -time_to_shutdown=YOUR_TIME
+stateful.exe -port=YOUR_PORT -logs_path=YOUR_FILE_FOR_STATE -time_for_shutdown=YOUR_TIME
 ```
 
 # TCP API 

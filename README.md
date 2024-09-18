@@ -1,7 +1,5 @@
 # NoSQL stateful database
 
-# Key features
-
 # Install
 ```cmd
 git clone https://github.com/KaliYugaSurfingClub/Cache.git Stateful/sources
@@ -25,14 +23,14 @@ stateful.exe -port=YOUR_PORT -logs_path=YOUR_FILE_FOR_STATE -time_for_shutdown=Y
 - URL: `/v1/{key}`
 - Method: `GET`
 - Response variants: 
-    - Body: `requesting value`, StatusCode: `200`
+    - Body: `your requesting value`, StatusCode: `200`
     - Body: `no such key`, StatusCode `404`
     - StatusCode `500`
 
 ## Put (idempotent)
 - URL: `/v1/{key}`
 - Method: `PUT`
-- Request Body: `your value` (simple text)
+- Request Body: `your value to save` (simple text)
 - Response variants:
   - StatusCode `201`
   - StatusCode `500`

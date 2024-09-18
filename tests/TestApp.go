@@ -12,37 +12,35 @@ import (
 	"time"
 )
 
-type AppStarter struct {
+type TestingApp struct {
 	location string
 	root     string
 	args     []string
-	client   *http.Client
 	cmd      *exec.Cmd
 }
 
 const localhost = "http://127.0.0.1"
 const defaultPort = "8080"
 
-func NewApp(location string) *AppStarter {
-	return &AppStarter{
+func NewApp(location string) *TestingApp {
+	return &TestingApp{
 		location: location,
 		root:     localhost + ":" + defaultPort,
-		client:   &http.Client{},
 	}
 }
 
-func (a *AppStarter) WithBandwidth(bandwidth int) *AppStarter {
+func (a *TestingApp) WithBandwidth(bandwidth int) *TestingApp {
 	a.args = append(a.args, fmt.Sprintf("-bandwidth=%d", bandwidth))
 	return a
 }
 
-func (a *AppStarter) WithPort(port string) *AppStarter {
+func (a *TestingApp) WithPort(port string) *TestingApp {
 	a.root = localhost + ":" + port
 	a.args = append(a.args, fmt.Sprintf("-port=%s", port))
 	return a
 }
 
-func (a *AppStarter) Start() {
+func (a *TestingApp) Start() {
 	//compile app file
 	if err := exec.Command("go", "build", a.location).Run(); err != nil {
 		log.Fatal(err)
@@ -61,7 +59,7 @@ func (a *AppStarter) Start() {
 	time.Sleep(3 * time.Second)
 }
 
-func (a *AppStarter) Stop() {
+func (a *TestingApp) Stop() {
 	//not supported by windows(
 
 	//if err := a.cmd.Process.Signal(syscall.SIGINT); err != nil {
@@ -77,32 +75,41 @@ func (a *AppStarter) Stop() {
 	}
 }
 
-func (a *AppStarter) CheckNoSuchKey(key string) error {
-	return a.GetRequest(key, core.ErrorNoSuchKey.Error()+"\n")
+func (a *TestingApp) CheckNoSuchKey(key string) error {
+	return a.CheckGetRequest(key, core.ErrorNoSuchKey.Error()+"\n")
 }
 
-func (a *AppStarter) GetRequest(key string, want string) error {
+func (a *TestingApp) GetRequest(key string) (string, error) {
 	url := a.root + "/v1/" + key
 
 	resp, err := http.Get(url)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	value, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 
-	if string(value) != want {
+	return string(value), err
+}
+
+func (a *TestingApp) CheckGetRequest(key string, want string) error {
+	value, err := a.GetRequest(key)
+	if err != nil {
+		return err
+	}
+
+	if value != want {
 		return fmt.Errorf("for key: %q: got %q, want %q", key, value, want)
 	}
 
 	return nil
 }
 
-func (a *AppStarter) PutRequest(key, value string) error {
+func (a *TestingApp) PutRequest(key string, value string) error {
 	url := a.root + "/v1/" + key
 
 	req, err := http.NewRequest("PUT", url, strings.NewReader(value))
@@ -110,7 +117,7 @@ func (a *AppStarter) PutRequest(key, value string) error {
 		return err
 	}
 
-	resp, err := a.client.Do(req)
+	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
 		return err
 	}
@@ -123,7 +130,7 @@ func (a *AppStarter) PutRequest(key, value string) error {
 	return nil
 }
 
-func (a *AppStarter) DeleteRequest(key string) error {
+func (a *TestingApp) DeleteRequest(key string) error {
 	url := a.root + "/v1/" + key
 
 	req, err := http.NewRequest("DELETE", url, nil)
@@ -131,7 +138,7 @@ func (a *AppStarter) DeleteRequest(key string) error {
 		return err
 	}
 
-	resp, err := a.client.Do(req)
+	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
 		return err
 	}
@@ -141,7 +148,7 @@ func (a *AppStarter) DeleteRequest(key string) error {
 	return nil
 }
 
-func (a *AppStarter) ClearRequest() error {
+func (a *TestingApp) ClearRequest() error {
 	url := a.root + "/v1/operation/clear"
 
 	req, err := http.NewRequest("DELETE", url, nil)
@@ -149,7 +156,7 @@ func (a *AppStarter) ClearRequest() error {
 		return err
 	}
 
-	resp, err := a.client.Do(req)
+	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
 		return err
 	}

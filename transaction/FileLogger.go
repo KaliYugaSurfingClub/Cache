@@ -26,7 +26,7 @@ func NewLogger(filename string, bandwidth int) (core.TransactionLogger, error) {
 	}
 
 	if bandwidth < 1 {
-		return nil, errors.New("bandwidth must be at least 1")
+		return nil, errors.New("bandwidth should be at least 1")
 	}
 
 	file, err := os.OpenFile(filename, os.O_RDWR|os.O_APPEND|os.O_CREATE, 0755)

@@ -2,14 +2,14 @@
 
 # Install
 ```cmd
-git clone https://github.com/KaliYugaSurfingClub/Cache.git Stateful/sources
-cd Stateful/sources
-go build -o ../stateful.exe main.go
+git clone https://github.com/KaliYugaSurfingClub/Cache.git cache/src
+cd cache/src
+go build -o ../cache main.go
 ```
 
 # The use
 ```cmd
-stateful.exe -port=YOUR_PORT -logs_path=YOUR_FILE_FOR_STATE -time_for_shutdown=YOUR_TIME
+cache -port=YOUR_PORT -logs_path=YOUR_FILE_FOR_STATE -time_for_shutdown=YOUR_TIME
 ```
 
 # TCP API 
@@ -46,6 +46,4 @@ stateful.exe -port=YOUR_PORT -logs_path=YOUR_FILE_FOR_STATE -time_for_shutdown=Y
 - Method: `DELETE`
 - Response variants:
     - StatusCode `200`
-
-# Key features
 
